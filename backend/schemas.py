@@ -26,9 +26,8 @@ class ArendasResponse(BaseModel):
     nume_complet: str
     cnp: str
     adresa: str
-    
-    # Aici e magia: când afișăm omul, afișăm și o listă cu terenurile lui!
-    terenuri: List[TerenResponse] = []
+
+    terenuri: List[TerenResponse] = [] #afisare terenuri
 
     model_config = ConfigDict(from_attributes=True)
 

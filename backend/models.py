@@ -11,7 +11,6 @@ class Arendas(Base):
     adresa = Column(String)
 
     terenuri = relationship("Teren", back_populates="proprietar")
-    # Nou: Legătura către plăți
     plati = relationship("Plata", back_populates="beneficiar")
 
 class Teren(Base):
@@ -22,7 +21,7 @@ class Teren(Base):
     arendas_id = Column(Integer, ForeignKey("arendasi.id"))
     proprietar = relationship("Arendas", back_populates="terenuri")
 
-# --- TABELUL NOU PENTRU PLĂȚI ---
+# ---  PENTRU PLĂȚI ---
 class Plata(Base):
     __tablename__ = "plati"
     id = Column(Integer, primary_key=True, index=True)
