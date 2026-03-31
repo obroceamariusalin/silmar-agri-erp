@@ -1,18 +1,27 @@
-from pydantic import BaseModel, ConfigDict
-from typing import List
+from pydantic import BaseModel, ConfigDict, computed_field
+from typing import List, Optional
 from datetime import datetime
 
 # --- SCHEME PENTRU TERENURI ---
 class TerenCreate(BaseModel):
-    comuna: str
+    comuna: str = "Argetoaia"
+    tarlaua: str
+    parcela: str
     suprafata_ha: float
+
+class TerenUpdate(BaseModel): 
+    comuna: Optional[str] = None
+    tarlaua: Optional[str] = None
+    parcela: Optional[str] = None
+    suprafata_ha: Optional[float] = None
 
 class TerenResponse(BaseModel):
     id: int
     comuna: str
+    tarlaua: str
+    parcela: str
     suprafata_ha: float
     arendas_id: int
-
     model_config = ConfigDict(from_attributes=True)
 
 # --- SCHEME PENTRU ARENDAȘI ---
@@ -21,13 +30,22 @@ class ArendasCreate(BaseModel):
     cnp: str
     adresa: str
 
+class ArendasUpdate(BaseModel): 
+    nume_complet: Optional[str] = None
+    cnp: Optional[str] = None
+    adresa: Optional[str] = None
+
 class ArendasResponse(BaseModel):
     id: int
     nume_complet: str
     cnp: str
     adresa: str
+    terenuri: List[TerenResponse] = []
+    plati: List[PlataResponse] = []
 
-    terenuri: List[TerenResponse] = [] #afisare terenuri
+    @computed_field
+    def suprafata_totala(self) -> float:
+        return sum(teren.suprafata_ha for teren in self.terenuri)
 
     model_config = ConfigDict(from_attributes=True)
 

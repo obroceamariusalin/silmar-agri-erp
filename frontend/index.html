@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silmar Farm ERP Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        .stats-card { border-left: 5px solid #198754; }
+        .dosar-header { background: #f8f9fa; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="#" onclick="schimbaEcran('ecran-bilant')">🚜 SILMAR ERP</a>
+        <div class="navbar-nav ms-auto">
+            <button class="btn btn-outline-light me-2" onclick="schimbaEcran('ecran-bilant')">Bilanț & Statistici</button>
+            <button class="btn btn-outline-light" onclick="schimbaEcran('ecran-arendasi')">Bază de Date</button>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-4">
+
+    <div id="zona-statistici" class="row mb-4">
+        <div class="col-md-4">
+            <div class="card stats-card shadow-sm p-3">
+                <small class="text-muted">Total Arendași</small>
+                <h3 id="stat-oameni" class="fw-bold">0</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stats-card shadow-sm p-3" style="border-left-color: #0d6efd;">
+                <small class="text-muted">Suprafață Totală (HA)</small>
+                <h3 id="stat-hectare" class="fw-bold">0.00</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stats-card shadow-sm p-3" style="border-left-color: #dc3545;">
+                <small class="text-muted">Total KG Datorate</small>
+                <h3 id="stat-kg" class="fw-bold">0</h3>
+            </div>
+        </div>
+    </div>
+
+    <div id="ecran-bilant" class="ecran">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Situația Plăților</h5>
+                <a href="/borderou/descarca-excel" class="btn btn-sm btn-success">Descărcare Excel</a>
+            </div>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nume</th>
+                            <th>Hectare</th>
+                            <th>Datorat (600kg/ha)</th>
+                            <th>Plătit</th>
+                            <th>Rest de Dat</th>
+                            <th>Acțiuni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabel-bilant"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="ecran-arendasi" class="ecran" style="display:none;">
+        <h4 class="mb-3">Dosare Arendași</h4>
+        <div class="row" id="container-dosare"></div>
+    </div>
+
+    <div class="modal fade" id="modalDosar" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Dosar: <span id="dosar-nume"></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4 border-end">
+                            <h6><i class="bi bi-person-badge"></i> Date Personale</h6>
+                            <p><strong>CNP:</strong> <span id="dosar-cnp"></span></p>
+                            <p><strong>Adresă:</strong> <span id="dosar-adresa"></span></p>
+                            <button class="btn btn-sm btn-warning w-100 mb-2" onclick="promptEditareOm()">Editează Date Personale</button>
+                            <button class="btn btn-sm btn-outline-danger w-100 mb-4" onclick="stergeOmCurent()">Șterge Dosar Definitiv</button>
+                            
+                            <h6><i class="bi bi-file-earmark-pdf"></i> Documente</h6>
+                            <ul id="lista-documente" class="list-group list-group-flush mb-3"></ul>
+                            <div class="input-group input-group-sm">
+                                <input type="file" class="form-control" id="fileInput">
+                                <button class="btn btn-outline-primary" onclick="uploadDocument()">Încarcă</button>
+                            </div>
+                        </div>
+
+                        <div class="col-md-8">
+                            <div class="d-flex justify-content-between mb-2">
+                                <h6><i class="bi bi-map"></i> Terenuri în Gestiune</h6>
+                                <button class="btn btn-sm btn-outline-success" onclick="arataFormTeren()">+ Teren Nou</button>
+                            </div>
+                            <table class="table table-sm table-bordered mb-4">
+                                <<thead class="table-light">
+                                    <tr>
+                                        <th>Tarla</th>
+                                        <th>Parcelă</th>
+                                        <th>Hectare (HA)</th>
+                                        <th>Acțiuni</th>
+                                    </tr>
+                                    </thead>
+                                <tbody id="dosar-tabel-terenuri"></tbody>
+                            </table>
+
+                            <h6><i class="bi bi-cash-stack"></i> Istoric Plăți (KG)</h6>
+                            <table class="table table-sm">
+                                <tbody id="dosar-tabel-plati"></tbody>
+                            </table>
+                            <div class="input-group input-group-sm w-50">
+                                <input type="number" id="plata-kg" class="form-control" placeholder="KG Plătite">
+                                <button class="btn btn-primary" onclick="salveazaPlata()">Adaugă Plată</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let arendasiGlobal = [];
+    let idCurent = null;
+    const modalDosar = new bootstrap.Modal(document.getElementById('modalDosar'));
+
+    async function incarcaDate() {
+        const res = await fetch('/arendasi/');
+        arendasiGlobal = await res.json();
+        actualizeazaStatistici();
+        populeazaTabele();
+    }
+
+    function actualizeazaStatistici() {
+        let totalOameni = arendasiGlobal.length;
+        let totalHectare = arendasiGlobal.reduce((acc, om) => acc + om.suprafata_totala, 0);
+        let totalKg = totalHectare * 600;
+
+        document.getElementById('stat-oameni').innerText = totalOameni;
+        document.getElementById('stat-hectare').innerText = totalHectare.toFixed(2);
+        document.getElementById('stat-kg').innerText = totalKg.toLocaleString() + " kg";
+    }
+
+    function populeazaTabele() {
+        const tBilant = document.getElementById('tabel-bilant');
+        tBilant.innerHTML = '';
+        const cDosare = document.getElementById('container-dosare');
+        cDosare.innerHTML = '';
+
+        arendasiGlobal.forEach(om => {
+            let datorat = om.suprafata_totala * 600;
+
+            let totalPlatit = 0;
+            if (om.plati && om.plati.length > 0) {
+                totalPlatit = om.plati.reduce((sum, p) => sum + p.cantitate_kg, 0);
+            }
+
+            let restDePlata = datorat - totalPlatit;
+
+            tBilant.innerHTML += `<tr>
+                <td class="fw-bold">${om.nume_complet}</td>
+                <td>${om.suprafata_totala.toFixed(2)}</td>
+                <td class="text-primary fw-bold">${datorat.toFixed(0)} kg</td>
+                <td class="text-success fw-bold">${totalPlatit.toFixed(0)} kg</td>
+                <td class="text-danger fw-bold">${restDePlata.toFixed(0)} kg</td>
+                <td><button class="btn btn-sm btn-outline-dark" onclick="deschideDosar(${om.id})">Deschide Dosar</button></td>
+            </tr>`;
+
+            cDosare.innerHTML += `
+                <div class="col-md-4 mb-3">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-body border-start border-4 border-success">
+                            <h5 class="fw-bold text-success">${om.nume_complet}</h5>
+                            <p class="small text-muted mb-2"><i class="bi bi-geo-alt"></i> ${om.adresa}</p>
+                            <p class="small mb-3">Rest de plată: <span class="text-danger fw-bold">${restDePlata.toFixed(0)} kg</span></p>
+                            <button class="btn btn-success w-100 btn-sm" onclick="deschideDosar(${om.id})">Administrează Dosar</button>
+                        </div>
+                    </div>
+                </div>`;
+        });
+    }
+
+    function deschideDosar(id) {
+        idCurent = id;
+        const om = arendasiGlobal.find(x => x.id === id);
+        document.getElementById('dosar-nume').innerText = om.nume_complet;
+        document.getElementById('dosar-cnp').innerText = om.cnp;
+        document.getElementById('dosar-adresa').innerText = om.adresa;
+
+        const tTerenuri = document.getElementById('dosar-tabel-terenuri');
+        tTerenuri.innerHTML = '';
+        om.terenuri.forEach(t => {
+            tTerenuri.innerHTML += `<tr>
+                <td>${t.tarlaua}</td><td>${t.parcela}</td><td>${t.suprafata_ha}</td>
+                <td>
+                    <button class="btn btn-sm text-warning" onclick="editTeren(${t.id})" title="Editează">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm text-danger" onclick="stergeTeren(${t.id})" title="Șterge Teren">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>`;
+        });
+
+        const tPlati = document.getElementById('dosar-tabel-plati');
+        tPlati.innerHTML = '';
+        if (om.plati && om.plati.length > 0) {
+            om.plati.forEach(p => {
+                let dataFrumoasa = new Date(p.data_operatiune).toLocaleDateString('ro-RO');
+                tPlati.innerHTML += `
+                <tr>
+                    <td class="text-muted small"><i class="bi bi-calendar-check"></i> ${dataFrumoasa}</td>
+                    <td class="text-success fw-bold">+ ${p.cantitate_kg} kg</td>
+                </tr>`;
+            });
+        } else {
+            tPlati.innerHTML = `<tr><td colspan="2" class="text-muted small">Nicio plată înregistrată încă.</td></tr>`;
+        }
+
+        const listaDoc = document.getElementById('lista-documente');
+        listaDoc.innerHTML = '<li class="list-group-item text-muted small">Se încarcă...</li>';
+        
+        fetch(`/arendasi/${id}/documente`)
+            .then(res => res.json())
+            .then(fisiere => {
+                listaDoc.innerHTML = ''; 
+                if(fisiere.length === 0) {
+                    listaDoc.innerHTML = '<li class="list-group-item text-muted small">Niciun document încărcat.</li>';
+                } else {
+                    fisiere.forEach(fisier => {
+                        let numeAfisat = fisier.substring(fisier.indexOf('_') + 1);
+                        listaDoc.innerHTML += `
+                            <li class="list-group-item d-flex justify-content-between align-items-center p-1">
+                                <a href="/acte/${fisier}" target="_blank" class="text-decoration-none text-primary small text-truncate" style="max-width: 150px;" title="${numeAfisat}">
+                                    <i class="bi bi-file-earmark-pdf text-danger"></i> ${numeAfisat}
+                                </a>
+                                <button class="btn btn-sm text-danger border-0" onclick="stergeDocument('${fisier}')" title="Șterge Document">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </li>`;
+                    });
+                }
+            });
+
+        modalDosar.show();
+    }
+
+    function schimbaEcran(id) {
+        document.querySelectorAll('.ecran').forEach(e => e.style.display = 'none');
+        document.getElementById(id).style.display = 'block';
+        document.getElementById('zona-statistici').style.display = (id === 'ecran-bilant') ? 'flex' : 'none';
+    }
+
+    // --- Funcția pentru EDITARE DATE PERSONALE ---
+    async function promptEditareOm() {
+        if (!idCurent) return;
+        const om = arendasiGlobal.find(x => x.id === idCurent);
+
+        const adresaNoua = prompt("Introdu noua adresă:", om.adresa);
+        
+        if (adresaNoua && adresaNoua !== om.adresa) {
+            const response = await fetch(`/arendasi/${idCurent}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ "adresa": adresaNoua })
+            });
+            if (response.ok) {
+                alert("Adresă actualizată cu succes!");
+                incarcaDate(); 
+                setTimeout(() => deschideDosar(idCurent), 300); 
+            }
+        }
+    }
+
+    // --- Funcția pentru EDITARE TEREN ---
+    async function editTeren(idTeren) {
+        const suprafataNoua = prompt("Introdu noua suprafață (în hectare):");
+        if (suprafataNoua) {
+            const response = await fetch(`/terenuri/${idTeren}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ "suprafata_ha": parseFloat(suprafataNoua) })
+            });
+            if (response.ok) {
+                incarcaDate();
+                setTimeout(() => deschideDosar(idCurent), 300);
+            }
+        }
+    }
+
+    // --- Funcția pentru ADĂUGARE TEREN NOU DIN DOSAR ---
+    async function arataFormTeren() {
+        const tarlaua = prompt("Număr Tarlaua:");
+        const parcela = prompt("Număr Parcela:");
+        const suprafata = prompt("Suprafața (HA):");
+
+        if (tarlaua && parcela && suprafata) {
+            const response = await fetch(`/arendasi/${idCurent}/terenuri/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    "tarlaua": tarlaua, 
+                    "parcela": parcela, 
+                    "suprafata_ha": parseFloat(suprafata) 
+                })
+            });
+            if (response.ok) {
+                incarcaDate();
+                setTimeout(() => deschideDosar(idCurent), 300);
+            }
+        }
+    }
+
+    // --- Funcția pentru ADAUGARE PLATĂ ---
+    async function salveazaPlata() {
+        if (!idCurent) return;
+        const kg = document.getElementById('plata-kg').value;
+        
+        if (!kg) {
+            alert("Te rog introdu cantitatea de grâu/porumb oferită!");
+            return;
+        }
+
+        const response = await fetch(`/arendasi/${idCurent}/plati/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                "cantitate_kg": parseFloat(kg), 
+                "anul_agricol": 2025 
+            })
+        });
+
+        if (response.ok) {
+            alert("Plată înregistrată cu succes!");
+            document.getElementById('plata-kg').value = ''; 
+            incarcaDate();
+            setTimeout(() => deschideDosar(idCurent), 300);
+        } else {
+            alert("Eroare: Nu am putut salva plata. Verifică backend-ul!");
+        }
+    }
+
+    // --- Funcția pentru UPLOAD DOCUMENT ---
+    async function uploadDocument() {
+        if (!idCurent) return;
+        const fileInput = document.getElementById('fileInput');
+        
+        if (fileInput.files.length === 0) {
+            alert("Te rog selectează un fișier PDF sau poză mai întâi!");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        const response = await fetch(`/arendasi/${idCurent}/upload/`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            alert("Document salvat cu succes în arhiva firmei!");
+            fileInput.value = ''; 
+        } else {
+            alert("Eroare la încărcarea fișierului.");
+        }
+    }
+
+
+
+    // --- ȘTERGE ARENDAȘ ---
+    async function stergeOmCurent() {
+        if (!idCurent) return;
+        const om = arendasiGlobal.find(x => x.id === idCurent);
+        
+        if (confirm(`ATENȚIE! Ești sigur că vrei să ștergi dosarul lui ${om.nume_complet}?\nSe vor șterge automat și toate terenurile, plățile și actele lui!`)) {
+            const response = await fetch(`/arendasi/${idCurent}`, { method: 'DELETE' });
+            if (response.ok) {
+                alert("Dosar șters cu succes!");
+                modalDosar.hide(); 
+                incarcaDate();     
+            } else {
+                alert("A apărut o eroare la ștergere.");
+            }
+        }
+    }
+
+    // --- ȘTERGERE TEREN INDIVIDUAL ---
+    async function stergeTeren(idTeren) {
+        if (confirm("Ești sigur că vrei să elimini această parcelă?")) {
+            const response = await fetch(`/terenuri/${idTeren}`, { method: 'DELETE' });
+            if (response.ok) {
+                incarcaDate(); 
+                setTimeout(() => deschideDosar(idCurent), 300); 
+            }
+        }
+    }
+
+    // --- ȘTERGERE DOCUMENT FIZIC ---
+    async function stergeDocument(numeFisier) {
+        if (confirm("Ești sigur că vrei să ștergi definitiv acest document?")) {
+            const response = await fetch(`/arendasi/${idCurent}/documente/${numeFisier}`, { method: 'DELETE' });
+            if (response.ok) {
+                deschideDosar(idCurent); 
+            } else {
+                alert("Nu am putut șterge fișierul. Poate a fost deja șters?");
+            }
+        }
+    }
+    
+    window.onload = incarcaDate;
+</script>
+</body>
+</html>
