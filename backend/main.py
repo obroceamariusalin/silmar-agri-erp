@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from database import engine, Base, SessionLocal
-from fpdf import FPDF 
+from fpdf import FPDF
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 
 Base.metadata.create_all(bind=engine)
@@ -16,6 +19,12 @@ os.makedirs("acte_salvate", exist_ok=True)
 
 app = FastAPI(title="Sistem Arenda API")
 
+cloudinary.config( 
+  cloud_name = "dmsgvmhy2", 
+  api_key = "615547999745442", 
+  api_secret = "2hSOqmsiV5gbUct_NJwSFxMDWQk",
+  secure = True
+)
 
 def get_db():
     db = SessionLocal()
@@ -238,39 +247,45 @@ def descarca_borderou_excel(db: Session = Depends(get_db)):
 # --- CITIRE LISTĂ DOCUMENTE ---
 @app.get("/arendasi/{arendas_id}/documente")
 def get_documente(arendas_id: int):
-    if not os.path.exists("acte_salvate"):
+    try:
+        rezultate = cloudinary.api.resources(type="upload", prefix=f"{arendas_id}_", max_results=50)
+        
+        fisiere_gasite = []
+        for doc in rezultate.get('resources', []):
+            extensie = doc.get('format', '')
+            nume_complet = f"{doc['public_id']}.{extensie}" if extensie else doc['public_id']
+            
+            fisiere_gasite.append({
+                "nume": nume_complet,
+                "url": doc['secure_url'] 
+            })
+        return fisiere_gasite
+    except Exception as e:
+        print(f"Eroare la citirea din cloud: {e}")
         return []
 
-    toate_fisierele = os.listdir("acte_salvate")
-    fisierele_omului = [f for f in toate_fisierele if f.startswith(f"{arendas_id}_")]
 
-    return fisierele_omului
-
-
-# --- UPLOAD DOCUMENT ---
+# ---  UPLOAD ÎN CLOUD ---
 @app.post("/arendasi/{arendas_id}/upload/")
 def upload_document(arendas_id: int, file: UploadFile = File(...)):
+    nume_fara_extensie = file.filename.rsplit('.', 1)[0]
+    nume_public = f"{arendas_id}_{nume_fara_extensie}"
 
-    os.makedirs("acte_salvate", exist_ok=True)
-
-    file_location = f"acte_salvate/{arendas_id}_{file.filename}"
-
-    with open(file_location, "wb+") as file_object:
-        shutil.copyfileobj(file.file, file_object)
-
-    return {"mesaj": f"Documentul {file.filename} a fost salvat cu succes!"}
+    cloudinary.uploader.upload(file.file, public_id=nume_public, resource_type="auto")
+    return {"mesaj": "Document salvat în siguranță în cloud!"}
 
 
-# --- ȘTERGERE DOCUMENT ---
+# --- ȘTERGERE DIN CLOUD ---
 @app.delete("/arendasi/{arendas_id}/documente/{nume_fisier}")
 def sterge_document(arendas_id: int, nume_fisier: str):
-    cale_fisier = f"acte_salvate/{nume_fisier}"
-
-    if os.path.exists(cale_fisier) and nume_fisier.startswith(f"{arendas_id}_"):
-        os.remove(cale_fisier) 
-        return {"mesaj": "Document șters cu succes!"}
-        
-    raise HTTPException(status_code=404, detail="Fisierul nu a fost gasit!")
+    public_id = nume_fisier.rsplit('.', 1)[0]
+    
+    try:
+        cloudinary.uploader.destroy(public_id, resource_type="image")
+        cloudinary.uploader.destroy(public_id, resource_type="raw")
+        return {"mesaj": "Document sters definitiv din cloud!"}
+    except:
+        raise HTTPException(status_code=404, detail="Eroare la stergere")
 
 # --- ȘTERGERE TEREN INDIVIDUAL ---
 @app.delete("/terenuri/{teren_id}")
@@ -283,5 +298,4 @@ def sterge_teren(teren_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"mesaj": "Teren sters cu succes!"}
 
-app.mount("/acte", StaticFiles(directory="acte_salvate"), name="acte")
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")

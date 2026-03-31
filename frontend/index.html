@@ -240,16 +240,16 @@
             .then(fisiere => {
                 listaDoc.innerHTML = ''; 
                 if(fisiere.length === 0) {
-                    listaDoc.innerHTML = '<li class="list-group-item text-muted small">Niciun document încărcat.</li>';
+                    listaDoc.innerHTML = '<li class="list-group-item text-muted small">Niciun document.</li>';
                 } else {
                     fisiere.forEach(fisier => {
-                        let numeAfisat = fisier.substring(fisier.indexOf('_') + 1);
+                        let numeAfisat = fisier.nume.substring(fisier.nume.indexOf('_') + 1);
                         listaDoc.innerHTML += `
                             <li class="list-group-item d-flex justify-content-between align-items-center p-1">
-                                <a href="/acte/${fisier}" target="_blank" class="text-decoration-none text-primary small text-truncate" style="max-width: 150px;" title="${numeAfisat}">
+                                <a href="${fisier.url}" target="_blank" class="text-decoration-none text-primary small text-truncate" style="max-width: 150px;" title="${numeAfisat}">
                                     <i class="bi bi-file-earmark-pdf text-danger"></i> ${numeAfisat}
                                 </a>
-                                <button class="btn btn-sm text-danger border-0" onclick="stergeDocument('${fisier}')" title="Șterge Document">
+                                <button class="btn btn-sm text-danger border-0" onclick="stergeDocument('${fisier.nume}')" title="Șterge Document">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </li>`;
