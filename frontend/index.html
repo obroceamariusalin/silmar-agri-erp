@@ -70,8 +70,39 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modalAdaugaArendas" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Adaugă Arendaș Nou</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label>Nume Complet</label>
+                        <input type="text" id="input-nume-nou" class="form-control" placeholder="ex: Ion Popescu">
+                    </div>
+                    <div class="mb-3">
+                        <label>CNP</label>
+                        <input type="text" id="input-cnp-nou" class="form-control" placeholder="ex: 1900101...">
+                    </div>
+                    <div class="mb-3">
+                        <label>Adresă</label>
+                        <input type="text" id="input-adresa-noua" class="form-control" placeholder="ex: Sat Argetoaia...">
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="salveazaArendasNou()">Salvează Arendaș</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="ecran-arendasi" class="ecran" style="display:none;">
-        <h4 class="mb-3">Dosare Arendași</h4>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0">Dosare Arendași</h4>
+            <button class="btn btn-primary shadow-sm" onclick="modalAdaugaArendas.show()">
+                <i class="bi bi-person-plus"></i> Adaugă Arendaș
+            </button>
+        </div>
         <div class="row" id="container-dosare"></div>
     </div>
 
@@ -137,6 +168,7 @@
     let arendasiGlobal = [];
     let idCurent = null;
     const modalDosar = new bootstrap.Modal(document.getElementById('modalDosar'));
+    const modalAdaugaArendas = new bootstrap.Modal(document.getElementById('modalAdaugaArendas'));
 
     async function incarcaDate() {
         const res = await fetch('/arendasi/');
@@ -264,6 +296,39 @@
         document.querySelectorAll('.ecran').forEach(e => e.style.display = 'none');
         document.getElementById(id).style.display = 'block';
         document.getElementById('zona-statistici').style.display = (id === 'ecran-bilant') ? 'flex' : 'none';
+    }
+
+
+    // --- Funcția pentru ADĂUGARE ARENDAȘ NOU ---
+    async function salveazaArendasNou() {
+        const nume = document.getElementById('input-nume-nou').value;
+        const cnp = document.getElementById('input-cnp-nou').value;
+        const adresa = document.getElementById('input-adresa-noua').value;
+
+        if (!nume || !cnp) {
+            alert("Te rog completează Numele și CNP-ul!");
+            return;
+        }
+
+        const response = await fetch('/arendasi/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                "nume_complet": nume, 
+                "cnp": cnp, 
+                "adresa": adresa || "" 
+            })
+        });
+
+        if (response.ok) {
+            modalAdaugaArendas.hide(); 
+            document.getElementById('input-nume-nou').value = '';
+            document.getElementById('input-cnp-nou').value = '';
+            document.getElementById('input-adresa-noua').value = '';
+            incarcaDate(); 
+        } else {
+            alert("Eroare la salvare! Verifică dacă CNP-ul nu există deja în sistem.");
+        }
     }
 
     // --- Funcția pentru EDITARE DATE PERSONALE ---
