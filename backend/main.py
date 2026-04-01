@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 import openpyxl
 from fastapi.responses import FileResponse 
@@ -12,12 +13,27 @@ from fpdf import FPDF
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+import secrets
 
 
 Base.metadata.create_all(bind=engine)
 os.makedirs("acte_salvate", exist_ok=True)
 
-app = FastAPI(title="Sistem Arenda API")
+security = HTTPBasic()
+
+def verifica_parola(credentials: HTTPBasicCredentials = Depends(security)):
+    user_corect = secrets.compare_digest(credentials.username, "silmar")
+    parola_corecta = secrets.compare_digest(credentials.password, "silmar")
+    
+    if not (user_corect and parola_corecta):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Date de conectare incorecte",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+app = FastAPI(dependencies=[Depends(verifica_parola)])
 
 cloudinary.config( 
   cloud_name = "dmsgvmhy2", 
