@@ -25,6 +25,18 @@
 
 <div class="container mt-4">
 
+    <div class="row mb-4">
+        <div class="col-md-6 offset-md-3">
+            <div class="input-group shadow-sm">
+                <span class="input-group-text bg-white border-end-0">
+                    <i class="bi bi-search text-muted"></i>
+                </span>
+                <input type="text" id="input-cautare" class="form-control border-start-0 ps-0" 
+                       placeholder="Caută arendaș după nume sau CNP..." oninput="filtreazaDate()">
+            </div>
+        </div>
+    </div>
+
     <div id="zona-statistici" class="row mb-4">
         <div class="col-md-4">
             <div class="card stats-card shadow-sm p-3">
@@ -167,6 +179,7 @@
 <script>
     let arendasiGlobal = [];
     let idCurent = null;
+    
     const modalDosar = new bootstrap.Modal(document.getElementById('modalDosar'));
     const modalAdaugaArendas = new bootstrap.Modal(document.getElementById('modalAdaugaArendas'));
 
@@ -188,42 +201,48 @@
     }
 
     function populeazaTabele() {
+        const termen = document.getElementById('input-cautare').value.toLowerCase(); // Citim ce s-a scris
         const tBilant = document.getElementById('tabel-bilant');
-        tBilant.innerHTML = '';
         const cDosare = document.getElementById('container-dosare');
+        
+        tBilant.innerHTML = ''; 
         cDosare.innerHTML = '';
 
         arendasiGlobal.forEach(om => {
+            // VERIFICĂM DACĂ OMUL CORESPUNDE CĂUTĂRII
+            const sePotriveste = om.nume_complet.toLowerCase().includes(termen) || om.cnp.includes(termen);
+            if (!sePotriveste) return; // Dacă nu se potrivește, trecem la următorul fără să-l afișăm
+
             let datorat = om.suprafata_totala * 600;
-
-            let totalPlatit = 0;
-            if (om.plati && om.plati.length > 0) {
-                totalPlatit = om.plati.reduce((sum, p) => sum + p.cantitate_kg, 0);
-            }
-
+            let totalPlatit = om.plati ? om.plati.reduce((sum, p) => sum + p.cantitate_kg, 0) : 0;
             let restDePlata = datorat - totalPlatit;
 
+            // Desenăm rândul în tabel
             tBilant.innerHTML += `<tr>
                 <td class="fw-bold">${om.nume_complet}</td>
                 <td>${om.suprafata_totala.toFixed(2)}</td>
                 <td class="text-primary fw-bold">${datorat.toFixed(0)} kg</td>
                 <td class="text-success fw-bold">${totalPlatit.toFixed(0)} kg</td>
                 <td class="text-danger fw-bold">${restDePlata.toFixed(0)} kg</td>
-                <td><button class="btn btn-sm btn-outline-dark" onclick="deschideDosar(${om.id})">Deschide Dosar</button></td>
+                <td><button class="btn btn-sm btn-outline-dark" onclick="deschideDosar(${om.id})">Dosar</button></td>
             </tr>`;
 
+            // Desenăm cardul în Baza de Date
             cDosare.innerHTML += `
                 <div class="col-md-4 mb-3">
                     <div class="card shadow-sm border-0">
                         <div class="card-body border-start border-4 border-success">
                             <h5 class="fw-bold text-success">${om.nume_complet}</h5>
                             <p class="small text-muted mb-2"><i class="bi bi-geo-alt"></i> ${om.adresa}</p>
-                            <p class="small mb-3">Rest de plată: <span class="text-danger fw-bold">${restDePlata.toFixed(0)} kg</span></p>
                             <button class="btn btn-success w-100 btn-sm" onclick="deschideDosar(${om.id})">Administrează Dosar</button>
                         </div>
                     </div>
                 </div>`;
         });
+    }
+
+    function filtreazaDate() {
+        populeazaTabele(); 
     }
 
     function deschideDosar(id) {
