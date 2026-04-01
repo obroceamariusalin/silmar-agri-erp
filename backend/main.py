@@ -298,4 +298,15 @@ def sterge_teren(teren_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"mesaj": "Teren sters cu succes!"}
 
+# --- ȘTERGERE PLATĂ ---
+@app.delete("/plati/{id_plata}")
+def sterge_plata(id_plata: int, db: Session = Depends(get_db)):
+    plata = db.query(models.Plata).filter(models.Plata.id == id_plata).first()
+    if not plata:
+        raise HTTPException(status_code=404, detail="Plata nu a fost gasita")
+    
+    db.delete(plata)
+    db.commit()
+    return {"mesaj": "Plată ștearsă cu succes!"}
+
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")

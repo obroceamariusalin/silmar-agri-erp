@@ -26,7 +26,7 @@
 <div class="container mt-4">
 
     <div class="row mb-4">
-        <div class="col-md-6 offset-md-3">
+        <div class="col-md-5 offset-md-2">
             <div class="input-group shadow-sm">
                 <span class="input-group-text bg-white border-end-0">
                     <i class="bi bi-search text-muted"></i>
@@ -34,6 +34,13 @@
                 <input type="text" id="input-cautare" class="form-control border-start-0 ps-0" 
                        placeholder="Caută arendaș după nume sau CNP..." oninput="filtreazaDate()">
             </div>
+        </div>
+        <div class="col-md-3">
+            <select id="filtru-an" class="form-select shadow-sm border-primary" onchange="filtreazaDate()">
+        <option value="2024">Anul Agricol 2024</option>
+        <option value="2025">Anul Agricol 2025</option>
+        <option value="2026" selected>Anul Agricol 2026</option> <option value="2027">Anul Agricol 2027</option>
+    </select>
         </div>
     </div>
 
@@ -163,11 +170,17 @@
                             <table class="table table-sm">
                                 <tbody id="dosar-tabel-plati"></tbody>
                             </table>
-                            <div class="input-group input-group-sm w-50">
+                            <div class="input-group input-group-sm w-75">
                                 <input type="number" id="plata-kg" class="form-control" placeholder="KG Plătite">
+                                <select id="plata-an" class="form-select" style="max-width: 100px;">
+                                    <option value="2024">2024</option>
+                                    <option value="2025">2025</option>
+                                    <option value="2026" selected>2026</option>
+                                    <option value="2027">2027</option>
+                                </select>
                                 <button class="btn btn-primary" onclick="salveazaPlata()">Adaugă Plată</button>
                             </div>
-                        </div>
+                            </div>
                     </div>
                 </div>
             </div>
@@ -201,7 +214,12 @@
     }
 
     function populeazaTabele() {
-        const termen = document.getElementById('input-cautare').value.toLowerCase(); // Citim ce s-a scris
+        const inputCauta = document.getElementById('input-cautare');
+        const termen = inputCauta ? inputCauta.value.toLowerCase() : "";
+        
+        const filtruAn = document.getElementById('filtru-an');
+        const anSelectat = filtruAn ? parseInt(filtruAn.value) : 2026;
+        
         const tBilant = document.getElementById('tabel-bilant');
         const cDosare = document.getElementById('container-dosare');
         
@@ -209,31 +227,38 @@
         cDosare.innerHTML = '';
 
         arendasiGlobal.forEach(om => {
-            // VERIFICĂM DACĂ OMUL CORESPUNDE CĂUTĂRII
-            const sePotriveste = om.nume_complet.toLowerCase().includes(termen) || om.cnp.includes(termen);
-            if (!sePotriveste) return; // Dacă nu se potrivește, trecem la următorul fără să-l afișăm
+            let numeSigur = om.nume_complet ? om.nume_complet.toLowerCase() : "";
+            let cnpSigur = om.cnp ? om.cnp.toLowerCase() : "";
+            
+            const sePotriveste = numeSigur.includes(termen) || cnpSigur.includes(termen);
+            if (!sePotriveste) return; 
 
             let datorat = om.suprafata_totala * 600;
-            let totalPlatit = om.plati ? om.plati.reduce((sum, p) => sum + p.cantitate_kg, 0) : 0;
+
+            let platiFiltrate = om.plati || [];
+            if (anSelectat !== "toti") {
+                platiFiltrate = platiFiltrate.filter(p => p.anul_agricol === parseInt(anSelectat));
+            }
+
+            let totalPlatit = platiFiltrate.reduce((sum, p) => sum + p.cantitate_kg, 0);
             let restDePlata = datorat - totalPlatit;
 
-            // Desenăm rândul în tabel
             tBilant.innerHTML += `<tr>
-                <td class="fw-bold">${om.nume_complet}</td>
+                <td class="fw-bold">${om.nume_complet || 'Necunoscut'}</td>
                 <td>${om.suprafata_totala.toFixed(2)}</td>
                 <td class="text-primary fw-bold">${datorat.toFixed(0)} kg</td>
                 <td class="text-success fw-bold">${totalPlatit.toFixed(0)} kg</td>
                 <td class="text-danger fw-bold">${restDePlata.toFixed(0)} kg</td>
-                <td><button class="btn btn-sm btn-outline-dark" onclick="deschideDosar(${om.id})">Dosar</button></td>
+                <td><button class="btn btn-sm btn-outline-dark" onclick="deschideDosar(${om.id})">Deschide Dosar</button></td>
             </tr>`;
 
-            // Desenăm cardul în Baza de Date
             cDosare.innerHTML += `
                 <div class="col-md-4 mb-3">
                     <div class="card shadow-sm border-0">
                         <div class="card-body border-start border-4 border-success">
-                            <h5 class="fw-bold text-success">${om.nume_complet}</h5>
-                            <p class="small text-muted mb-2"><i class="bi bi-geo-alt"></i> ${om.adresa}</p>
+                            <h5 class="fw-bold text-success">${om.nume_complet || 'Necunoscut'}</h5>
+                            <p class="small text-muted mb-2"><i class="bi bi-geo-alt"></i> ${om.adresa || '-'}</p>
+                            <p class="small mb-3">Rest plată (${anSelectat === 'toti' ? 'Total' : anSelectat}): <span class="text-danger fw-bold">${restDePlata.toFixed(0)} kg</span></p>
                             <button class="btn btn-success w-100 btn-sm" onclick="deschideDosar(${om.id})">Administrează Dosar</button>
                         </div>
                     </div>
@@ -271,12 +296,22 @@
         const tPlati = document.getElementById('dosar-tabel-plati');
         tPlati.innerHTML = '';
         if (om.plati && om.plati.length > 0) {
-            om.plati.forEach(p => {
+            let platiSortate = om.plati.sort((a, b) => b.anul_agricol - a.anul_agricol);
+            
+            platiSortate.forEach(p => {
                 let dataFrumoasa = new Date(p.data_operatiune).toLocaleDateString('ro-RO');
                 tPlati.innerHTML += `
                 <tr>
-                    <td class="text-muted small"><i class="bi bi-calendar-check"></i> ${dataFrumoasa}</td>
-                    <td class="text-success fw-bold">+ ${p.cantitate_kg} kg</td>
+                    <td class="text-muted small align-middle">
+                        <i class="bi bi-calendar-check"></i> ${dataFrumoasa} 
+                        <strong class="text-primary ms-2">(Pentru Anul: ${p.anul_agricol})</strong>
+                    </td>
+                    <td class="text-success fw-bold align-middle">+ ${p.cantitate_kg} kg</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm text-danger border-0" onclick="stergePlata(${p.id})" title="Șterge Plata">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
                 </tr>`;
             });
         } else {
@@ -414,9 +449,10 @@
     async function salveazaPlata() {
         if (!idCurent) return;
         const kg = document.getElementById('plata-kg').value;
+        const anulAles = document.getElementById('plata-an').value; 
         
         if (!kg) {
-            alert("Te rog introdu cantitatea de grâu/porumb oferită!");
+            alert("Te rog introdu cantitatea oferită!");
             return;
         }
 
@@ -425,17 +461,29 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 "cantitate_kg": parseFloat(kg), 
-                "anul_agricol": 2025 
+                "anul_agricol": parseInt(anulAles) 
             })
         });
 
         if (response.ok) {
-            alert("Plată înregistrată cu succes!");
             document.getElementById('plata-kg').value = ''; 
             incarcaDate();
             setTimeout(() => deschideDosar(idCurent), 300);
         } else {
-            alert("Eroare: Nu am putut salva plata. Verifică backend-ul!");
+            alert("Eroare la salvarea plății.");
+        }
+    }
+
+// --- Funcția pentru ȘTERGERE PLATĂ ---
+    async function stergePlata(idPlata) {
+        if (confirm("Ești sigur că vrei să anulezi această plată? Restul de plată va crește la loc.")) {
+            const response = await fetch(`/plati/${idPlata}`, { method: 'DELETE' });
+            if (response.ok) {
+                incarcaDate(); 
+                setTimeout(() => deschideDosar(idCurent), 300); 
+            } else {
+                alert("Eroare: Nu am putut șterge plata din baza de date.");
+            }
         }
     }
 
