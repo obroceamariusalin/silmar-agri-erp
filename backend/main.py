@@ -14,6 +14,9 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 import secrets
+import pdfplumber
+import re
+import io
 
 
 Base.metadata.create_all(bind=engine)
@@ -53,10 +56,13 @@ def get_db():
 # --- Ruta pentru a adăuga un Arendaș ---
 @app.post("/arendasi/", response_model=schemas.ArendasResponse)
 def adauga_arendas(arendas: schemas.ArendasCreate, db: Session = Depends(get_db)):
- 
-    cnp_existent = db.query(models.Arendas).filter(models.Arendas.cnp == arendas.cnp).first()
-    if cnp_existent:
-        raise HTTPException(status_code=400, detail="Eroare: Acest CNP este deja inregistrat!")
+
+    if arendas.cnp and arendas.cnp.strip() != "":
+        cnp_existent = db.query(models.Arendas).filter(models.Arendas.cnp == arendas.cnp).first()
+        if cnp_existent:
+            raise HTTPException(status_code=400, detail="Eroare: Acest CNP este deja inregistrat!")
+    else:
+        arendas.cnp = f"LIPSA-{secrets.token_hex(3).upper()}"
     
     noul_arendas = models.Arendas(
         nume_complet=arendas.nume_complet,
@@ -64,7 +70,6 @@ def adauga_arendas(arendas: schemas.ArendasCreate, db: Session = Depends(get_db)
         adresa=arendas.adresa
     )
     
-
     db.add(noul_arendas)
     db.commit()
     db.refresh(noul_arendas) 
@@ -72,7 +77,7 @@ def adauga_arendas(arendas: schemas.ArendasCreate, db: Session = Depends(get_db)
     return noul_arendas
 
 
-    # --- Ruta pentru a afisa toti arendasii ---
+ # --- Ruta pentru a afisa toti arendasii ---
 @app.get("/arendasi/", response_model=list[schemas.ArendasResponse])
 def citeste_arendasi(db: Session = Depends(get_db)):
     arendasi = db.query(models.Arendas).all()
@@ -324,5 +329,59 @@ def sterge_plata(id_plata: int, db: Session = Depends(get_db)):
     db.delete(plata)
     db.commit()
     return {"mesaj": "Plată ștearsă cu succes!"}
+
+# --- EXTRAGERE DATE DIN PDF ---
+@app.post("/extrage-contract/")
+async def extrage_contract(file: UploadFile = File(...)):
+    try:
+        continut = await file.read()
+        text_complet = ""
+        
+        with pdfplumber.open(io.BytesIO(continut)) as pdf:
+            for page in pdf.pages:
+                extragere = page.extract_text()
+                if extragere:
+                    text_complet += extragere + " "
+
+        text = " ".join(text_complet.split())
+
+        print(f"DEBUG TEXT PDF: {text}")
+
+        nume_match = re.search(r'(?:Intre\s+doamna|Intre\s+domnul)\s+(.*?)\s+domiciliat', text, re.IGNORECASE)
+        nume = nume_match.group(1).strip() if nume_match else ""
+
+        adresa_match = re.search(r'domiciliat[aă]?\s+(?:in|în)\s+(.*?),\s+identificat', text, re.IGNORECASE)
+        adresa = adresa_match.group(1).strip() if adresa_match else ""
+        pattern_terenuri = r'Tarlaua\s*(\d+).*?parcel[aă]?\s*([\d\/A-Za-z]+).*?suprafa[tțţ]a\s*(?:de)?\s*([\d\s\.,]+)\s*(mp|ha)'
+        
+        terenuri_gasite = re.findall(pattern_terenuri, text, re.IGNORECASE)
+        
+        lista_terenuri = []
+        for t in terenuri_gasite:
+            tarla = t[0]
+            parcela = t[1] 
+            valoare_raw = t[2].replace(' ', '').replace(',', '.')
+            unitate = t[3].lower()
+            
+            try:
+                ha_parcela = float(valoare_raw)
+                if unitate == 'mp':
+                    ha_parcela = ha_parcela / 10000.0
+            except:
+                ha_parcela = 0.0
+                
+            lista_terenuri.append({
+                "tarlaua": tarla,
+                "parcela": parcela,
+                "suprafata_ha": round(ha_parcela, 4)
+            })
+
+        return {
+            "nume": nume,
+            "adresa": adresa,
+            "terenuri": lista_terenuri
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Eroare la citire PDF: {str(e)}")
 
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")

@@ -97,19 +97,28 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="alert alert-success p-2 mb-3 shadow-sm border-success">
+                        <label class="small fw-bold text-success mb-1"><i class="bi bi-magic"></i> Autocompletare din Contract
+                            PDF</label>
+                        <div class="input-group input-group-sm">
+                            <input type="file" id="input-pdf-auto" class="form-control" accept=".pdf">
+                            <button class="btn btn-success" id="btn-extrage" onclick="extrageDateDinPDF()">Extrage</button>
+                        </div>
+                    </div>
+            
                     <div class="mb-3">
                         <label>Nume Complet</label>
                         <input type="text" id="input-nume-nou" class="form-control" placeholder="ex: Ion Popescu">
                     </div>
                     <div class="mb-3">
-                        <label>CNP</label>
-                        <input type="text" id="input-cnp-nou" class="form-control" placeholder="ex: 1900101...">
+                        <label>CNP (Opțional)</label>
+                        <input type="text" id="input-cnp-nou" class="form-control" placeholder="Lasă gol dacă nu-l știi">
                     </div>
                     <div class="mb-3">
                         <label>Adresă</label>
                         <input type="text" id="input-adresa-noua" class="form-control" placeholder="ex: Sat Argetoaia...">
                     </div>
-                    <button class="btn btn-primary w-100" onclick="salveazaArendasNou()">Salvează Arendaș</button>
+                    <button class="btn btn-primary w-100" onclick="salveazaArendasNou()">Salvează Arendaș și Teren</button>
                 </div>
             </div>
         </div>
@@ -356,29 +365,38 @@
     // --- Funcția pentru ADĂUGARE ARENDAȘ NOU ---
     async function salveazaArendasNou() {
         const nume = document.getElementById('input-nume-nou').value;
-        const cnp = document.getElementById('input-cnp-nou').value;
+        const cnp = document.getElementById('input-cnp-nou').value || ""; 
         const adresa = document.getElementById('input-adresa-noua').value;
 
-        if (!nume || !cnp) {
-            alert("Te rog completează Numele și CNP-ul!");
+        if (!nume) {
+            alert("Te rog completează măcar Numele!");
             return;
         }
-
-        const response = await fetch('/arendasi/', {
+        const resArendas = await fetch('/arendasi/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                "nume_complet": nume, 
-                "cnp": cnp, 
-                "adresa": adresa || "" 
-            })
+            body: JSON.stringify({ "nume_complet": nume, "cnp": cnp, "adresa": adresa })
         });
 
-        if (response.ok) {
+        if (resArendas.ok) {
+            const omCreat = await resArendas.json();
+
+            if (listaTerenuriPDF.length > 0) {
+                for (let teren of listaTerenuriPDF) {
+                    await fetch(`/arendasi/${omCreat.id}/terenuri/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(teren)
+                    });
+                }
+                listaTerenuriPDF = []; 
+            }
+
             modalAdaugaArendas.hide(); 
             document.getElementById('input-nume-nou').value = '';
             document.getElementById('input-cnp-nou').value = '';
             document.getElementById('input-adresa-noua').value = '';
+            document.getElementById('input-pdf-auto').value = '';
             incarcaDate(); 
         } else {
             alert("Eroare la salvare! Verifică dacă CNP-ul nu există deja în sistem.");
@@ -553,6 +571,44 @@
                 alert("Nu am putut șterge fișierul. Poate a fost deja șters?");
             }
         }
+    }
+
+let listaTerenuriPDF = []; 
+
+    async function extrageDateDinPDF() {
+        const file = document.getElementById('input-pdf-auto').files[0];
+        if(!file) return alert("Selectează un contract PDF prima dată!");
+
+        const btn = document.getElementById('btn-extrage');
+        btn.innerText = "Se citește...";
+        btn.disabled = true;
+
+        const fd = new FormData();
+        fd.append("file", file);
+
+        try {
+            const res = await fetch('/extrage-contract/', { method: 'POST', body: fd });
+            const data = await res.json();
+
+            document.getElementById('input-nume-nou').value = data.nume || "";
+            document.getElementById('input-adresa-noua').value = data.adresa || "";
+
+            if(data.terenuri && data.terenuri.length > 0) {
+                listaTerenuriPDF = data.terenuri;
+                let mesaj = `Succes! Am extras numele: ${data.nume}\n\nAm găsit ${data.terenuri.length} terenuri:\n`;
+                data.terenuri.forEach(t => {
+                    mesaj += `- Tarla ${t.tarlaua}, Parcela ${t.parcela} (${t.suprafata_ha} HA)\n`;
+                });
+                alert(mesaj);
+            } else {
+                alert("Datele personale au fost extrase, dar nu am putut identifica clar parcelele în text.");
+            }
+        } catch(e) {
+            alert("Eroare la citirea documentului.");
+        }
+        
+        btn.innerText = "Extrage";
+        btn.disabled = false;
     }
     
     window.onload = incarcaDate;
