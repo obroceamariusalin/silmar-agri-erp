@@ -384,4 +384,24 @@ async def extrage_contract(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Eroare la citire PDF: {str(e)}")
 
+
+# --- SALVARE PREFERINȚĂ CEREALE ---
+@app.post("/arendasi/{arendas_id}/preferinte/")
+def salveaza_preferinta(arendas_id: int, pref: schemas.PreferintaAnualaCreate, db: Session = Depends(get_db)):
+    existenta = db.query(models.PreferintaAnuala).filter(
+        models.PreferintaAnuala.arendas_id == arendas_id,
+        models.PreferintaAnuala.anul_agricol == pref.anul_agricol
+    ).first()
+    
+    if existenta:
+        existenta.tip_cereala = pref.tip_cereala 
+    else:
+        noua = models.PreferintaAnuala(arendas_id=arendas_id, anul_agricol=pref.anul_agricol, tip_cereala=pref.tip_cereala)
+        db.add(noua) 
+        
+    db.commit()
+    return {"mesaj": "Preferința a fost actualizată!"}
+
+    
+    
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")

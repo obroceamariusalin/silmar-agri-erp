@@ -11,6 +11,7 @@ class Arendas(Base):
     cnp = Column(String, unique=True, index=True)
     adresa = Column(String)
 
+    preferinte = relationship("PreferintaAnuala", back_populates="arendas", cascade="all, delete-orphan")
     terenuri = relationship("Teren", back_populates="proprietar", cascade="all, delete-orphan")
     plati = relationship("Plata", back_populates="beneficiar", cascade="all, delete-orphan")
 
@@ -37,3 +38,13 @@ class Plata(Base):
 
     arendas_id = Column(Integer, ForeignKey("arendasi.id"))
     beneficiar = relationship("Arendas", back_populates="plati")
+
+class PreferintaAnuala(Base):
+    __tablename__ = "preferinte_anuale"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    arendas_id = Column(Integer, ForeignKey("arendasi.id"))
+    anul_agricol = Column(Integer)
+    tip_cereala = Column(String, default="grau") 
+    
+    arendas = relationship("Arendas", back_populates="preferinte")
