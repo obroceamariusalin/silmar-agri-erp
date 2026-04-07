@@ -199,36 +199,58 @@ def sterge_arendas(arendas_id: int, db: Session = Depends(get_db)):
     return {"mesaj": f"Arendasul {om.nume_complet} si toate terenurile lui au fost sterse cu succes!"}
 
 
+def extrage_localitate(adresa: str):
+    if not adresa:
+        return ""
+
+    match = re.search(r'(Comuna|Com\.|Mun\.|Municipiul|Ora[sș])\s+([A-ZĂÎÂȘȚa-zăîâșț\-\s]+)', adresa, re.IGNORECASE)
+    if match:
+        nume = match.group(2).split(',')[0].strip()
+        prefix = match.group(1).title().replace('Com.', 'Comuna')
+        return f"{prefix} {nume}"
+    
+    return adresa.split(',')[0].strip()
+
 # --- EXPORT BORDEROU EXCEL ---
 @app.get("/borderou/descarca-excel")
-def descarca_borderou_excel(db: Session = Depends(get_db)):
+def descarca_borderou_excel(an: int = 2026, db: Session = Depends(get_db)):
     arendasi = db.query(models.Arendas).all()
 
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Borderou 2026"
+    wb.remove(wb.active)
 
-    ws.append(["S.C. SILMAR SOLUTION SRL"])
-    ws.append(["C.F. 49659242"])
-    ws.append(["COMUNA ARGETOAIA"])
-    ws.append([]) 
-    ws.append(["", "", "", "BORDEROU PRIVIND PLATA ARENDEI IN PRODUSE PENTRU ANUL AGRICOL 2026"])
-    ws.append([]) 
+    ws_grau = wb.create_sheet(f"Grâu {an}")
+    ws_porumb = wb.create_sheet(f"Porumb {an}")
 
- 
     headers = [
-        "NR. CRT.", "NUME SI PRENUME", "ADRESA", "SUPRAFATA HA", 
+        "NR. CRT.", "NUME SI PRENUME", "LOCALITATE", "SUPRAFATA HA", 
         "CANTIT. BRUTA KG", "CANT. DUPA DED. 40%", "IMPOZIT 10%", 
         "CANTITA NETA", "VALOARE TVA", "CANTITATE PRIMITA", "SEMNATURA"
     ]
-    ws.append(headers)
 
-    nr_crt = 1
+    def setup_sheet(ws, titlu):
+        ws.append(["S.C. SILMAR SOLUTION SRL"])
+        ws.append(["C.F. 49659242"])
+        ws.append([f"BORDEROU PRIVIND PLATA ARENDEI ({titlu}) PENTRU ANUL AGRICOL {an}"])
+        ws.append([]) 
+        ws.append(headers)
+
+    setup_sheet(ws_grau, "GRÂU")
+    setup_sheet(ws_porumb, "PORUMB")
+
+    nr_crt_grau = 1
+    nr_crt_porumb = 1
+
     for om in arendasi:
         suprafata_totala = sum(t.suprafata_ha for t in om.terenuri)
 
         if suprafata_totala == 0:
             continue
+
+        pref = next((p for p in om.preferinte if p.anul_agricol == an), None)
+        tip_cereala = pref.tip_cereala if pref else "grau"
+
+        localitate_scurta = extrage_localitate(om.adresa)
 
         cant_bruta = round(suprafata_totala * 600)
         cant_dupa_ded = round(cant_bruta * 60 / 100)
@@ -238,9 +260,9 @@ def descarca_borderou_excel(db: Session = Depends(get_db)):
         cantitate_primita = cant_neta + valoare_tva
 
         rand_nou = [
-            nr_crt,
+            nr_crt_grau if tip_cereala == "grau" else nr_crt_porumb,
             om.nume_complet,
-            om.adresa,
+            localitate_scurta, 
             round(suprafata_totala, 3), 
             cant_bruta,
             cant_dupa_ded,
@@ -250,16 +272,20 @@ def descarca_borderou_excel(db: Session = Depends(get_db)):
             cantitate_primita,
             "" 
         ]
-        ws.append(rand_nou)
-        nr_crt += 1
 
-    nume_fisier = "acte_salvate/Borderou_Arenda_2026.xlsx"
+        if tip_cereala == "grau":
+            ws_grau.append(rand_nou)
+            nr_crt_grau += 1
+        else:
+            ws_porumb.append(rand_nou)
+            nr_crt_porumb += 1
+
+    nume_fisier = f"acte_salvate/Borderou_Arenda_{an}.xlsx"
     wb.save(nume_fisier)
 
-    
     return FileResponse(
         path=nume_fisier, 
-        filename="Borderou_Arenda_2026.xlsx",
+        filename=f"Borderou_Arenda_{an}.xlsx",
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 
