@@ -15,10 +15,11 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="#" onclick="schimbaEcran('ecran-bilant')">🚜 SILMAR SOLUTION</a>
+        <a class="navbar-brand fw-bold" href="#" onclick="schimbaEcran('ecran-bilant')">🚜 SILMAR SOLUTION SRL</a>
         <div class="navbar-nav ms-auto">
             <button class="btn btn-outline-light me-2" onclick="schimbaEcran('ecran-bilant')">Bilanț & Statistici</button>
-            <button class="btn btn-outline-light" onclick="schimbaEcran('ecran-arendasi')">Bază de Date</button>
+            <button class="btn btn-outline-light me-2" onclick="schimbaEcran('ecran-arendasi')">Bază de Date</button>
+            <button class="btn btn-outline-light" onclick="schimbaEcran('ecran-jurnal'); incarcaVremeaSiJurnalul()"><i class="bi bi-journal-text"></i> Jurnal Câmp</button>
         </div>
     </div>
 </nav>
@@ -32,15 +33,16 @@
                     <i class="bi bi-search text-muted"></i>
                 </span>
                 <input type="text" id="input-cautare" class="form-control border-start-0 ps-0" 
-                       placeholder="Caută arendaș după nume sau CNP..." oninput="filtreazaDate()">
+                       placeholder="Caută arendaș după nume sau CNP..." oninput="trateazaCautare()">
             </div>
         </div>
-        <div class="col-md-3">
-            <select id="filtru-an" class="form-select shadow-sm border-primary" onchange="filtreazaDate()">
-        <option value="2024">Anul Agricol 2024</option>
-        <option value="2025">Anul Agricol 2025</option>
-        <option value="2026" selected>Anul Agricol 2026</option> <option value="2027">Anul Agricol 2027</option>
-    </select>
+        <div class="col-md-3" id="container-filtru-an">
+            <select id="filtru-an" class="form-select shadow-sm border-primary" onchange="trateazaCautare()">
+                <option value="2024">Anul Agricol 2024</option>
+                <option value="2025">Anul Agricol 2025</option>
+                <option value="2026" selected>Anul Agricol 2026</option>
+                <option value="2027">Anul Agricol 2027</option>
+            </select>
         </div>
     </div>
 
@@ -126,6 +128,69 @@
                     </div>
                     <button class="btn btn-primary w-100" onclick="salveazaArendasNou()">Salvează Arendaș și Teren</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ecran-jurnal" class="ecran" style="display:none;">
+        <div class="row mb-4">
+            
+            <div class="col-md-4">
+                <div class="card shadow-sm text-center border-info h-100">
+                    <div class="card-header bg-info text-white fw-bold"><i class="bi bi-cloud-sun"></i> Vremea (Argetoaia)</div>
+                    <div class="card-body pb-2">
+                        <h1 id="meteo-temp" class="display-4 fw-bold text-info mb-0">--°C</h1>
+                        <h5 id="meteo-descriere" class="text-muted mb-1">Se încarcă...</h5>
+                        <small class="text-muted">Vânt: <span id="meteo-vant">--</span> km/h</small>
+                        
+                        <div id="meteo-saptamana" class="mt-3 p-2 bg-light rounded shadow-sm border d-flex justify-content-between small text-muted">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-warning text-dark fw-bold"><i class="bi bi-journal-plus"></i> Înregistrează o Lucrare</div>
+                    <div class="card-body">
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-4">
+                                <label class="small text-muted">Data</label>
+                                <input type="date" id="jurnal-data" class="form-control">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="small text-muted">Tarla / Parcelă</label>
+                                <input type="text" id="jurnal-tarla" class="form-control" placeholder="Ex: Tarla 129">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="small text-muted">Lucrare Efectuată</label>
+                                <input type="text" id="jurnal-lucrare" class="form-control" placeholder="Ex: Erbicidat, Arat...">
+                            </div>
+                        </div>
+                        <div class="text-center mt-4 mb-2">
+                            <button class="btn btn-warning w-100 fw-bold px-5 py-2 shadow-sm rounded-pill" onclick="salveazaJurnal()">
+                                <i class="bi bi-save"></i> Salvare în Jurnal
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div> <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="mb-3"><i class="bi bi-clock-history"></i> Istoric Lucrări</h5>
+                <table class="table table-hover table-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Data</th>
+                            <th>Locație</th>
+                            <th>Lucrare</th>
+                            <th>Vremea la momentul lucrării</th>
+                            <th class="text-end">Acțiuni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabel-jurnal"></tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -224,10 +289,19 @@
     const modalDosar = new bootstrap.Modal(document.getElementById('modalDosar'));
     const modalAdaugaArendas = new bootstrap.Modal(document.getElementById('modalAdaugaArendas'));
 
-    async function incarcaDate() {
+   async function incarcaDate() {
         const res = await fetch('/arendasi/');
         arendasiGlobal = await res.json();
         populeazaTabele(); 
+        
+        // --- LINIILE NOI: Citim memoria și mutăm utilizatorul ---
+        const ecranSalvat = localStorage.getItem('ecranSalvat') || 'ecran-bilant';
+        schimbaEcran(ecranSalvat);
+        
+        // Dacă a dat refresh direct pe Jurnal, forțăm și încărcarea vremii!
+        if (ecranSalvat === 'ecran-jurnal') {
+            incarcaVremeaSiJurnalul();
+        }
     }
 
 
@@ -384,10 +458,43 @@ function populeazaTabele() {
         modalDosar.show();
     }
 
+    let ecranCurent = 'ecran-bilant';
+
     function schimbaEcran(id) {
+        ecranCurent = id;
+        localStorage.setItem('ecranSalvat', id);
         document.querySelectorAll('.ecran').forEach(e => e.style.display = 'none');
         document.getElementById(id).style.display = 'block';
-        document.getElementById('zona-statistici').style.display = (id === 'ecran-bilant') ? 'flex' : 'none';
+        
+        const zonaStatistici = document.getElementById('zona-statistici');
+        const inputCautare = document.getElementById('input-cautare');
+        const containerAn = document.getElementById('container-filtru-an');
+
+        if (id === 'ecran-bilant') {
+            zonaStatistici.style.display = 'flex';
+            containerAn.style.display = 'block'; // Arătăm anii
+            inputCautare.placeholder = "Caută arendaș după nume sau CNP...";
+        } else if (id === 'ecran-arendasi') {
+            zonaStatistici.style.display = 'none';
+            containerAn.style.display = 'none'; // Ascundem anii la Baza de Date
+            inputCautare.placeholder = "Caută arendaș după nume sau CNP...";
+        } else if (id === 'ecran-jurnal') {
+            zonaStatistici.style.display = 'none';
+            containerAn.style.display = 'block'; 
+            inputCautare.placeholder = "Caută în jurnal (Tarla sau Lucrare)...";
+        }
+        
+        // Când schimbi ecranul, golim căsuța de căutare
+        inputCautare.value = "";
+        trateazaCautare();
+    }
+
+    function trateazaCautare() {
+        if (ecranCurent === 'ecran-jurnal') {
+            filtreazaJurnal(); // Dacă suntem la Jurnal, filtrăm jurnalul
+        } else {
+            filtreazaDate();   // Altfel, filtrăm arendașii
+        }
     }
 
 
@@ -659,10 +766,158 @@ async function salveazaPreferinta() {
         }
     }
 
-    function descarcaExcel() {
+function descarcaExcel() {
         const anSelectat = document.getElementById('filtru-an').value || 2026;
         window.location.href = `/borderou/descarca-excel?an=${anSelectat}`;
+}
+
+
+let tempCurenta = "--";
+    let vremeCurenta = "--";
+    let jurnalGlobal = []; // Ține minte jurnalul ca să îl putem filtra
+
+    const coduriVreme = {
+        0: "Senin ☀️", 1: "Senin 🌤️", 2: "Parțial Noros ⛅", 3: "Înnorat ☁️",
+        45: "Ceață 🌫️", 48: "Ceață Înghețată 🌫️", 51: "Burniță 💧", 53: "Burniță 💧",
+        61: "Ploaie Ușoară 🌧️", 63: "Ploaie 🌧️", 65: "Ploaie Grea 🌧️", 
+        71: "Ninsoare ❄️", 95: "Furtună ⛈️"
+    };
+
+    document.getElementById('jurnal-data').addEventListener('change', async function() {
+        await actualizeazaVremeaPentruData(this.value);
+    });
+
+    // Funcție ca să adunăm zile la o dată
+    function adaugaZile(dataStr, zile) {
+        let d = new Date(dataStr);
+        d.setDate(d.getDate() + zile);
+        return d.toISOString().split('T')[0];
     }
+
+    async function actualizeazaVremeaPentruData(dataSelectata) {
+        document.getElementById('meteo-descriere').innerText = "Se caută vremea...";
+        document.getElementById('meteo-vant').innerText = "--";
+        document.getElementById('meteo-saptamana').innerHTML = ""; 
+        
+        try {
+            const dataFinala = adaugaZile(dataSelectata, 6); // Cerem pe 7 zile (ziua aleasă + încă 6)
+            
+            // Am adăugat "windspeed_10m_max" ca să prindem vântul!
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=44.51&longitude=23.38&daily=temperature_2m_max,weathercode,windspeed_10m_max&timezone=auto&start_date=${dataSelectata}&end_date=${dataFinala}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            if(data.daily && data.daily.time.length > 0) {
+                // Setăm ziua principală (Index 0)
+                tempCurenta = data.daily.temperature_2m_max[0] + "°C";
+                vremeCurenta = coduriVreme[data.daily.weathercode[0]] || "Variabil";
+                
+                document.getElementById('meteo-temp').innerText = tempCurenta;
+                document.getElementById('meteo-descriere').innerText = vremeCurenta;
+                document.getElementById('meteo-vant').innerText = data.daily.windspeed_10m_max[0];
+
+                // Setăm restul de 6 zile jos
+                let htmlZile = "";
+                for(let i=1; i<data.daily.time.length; i++) {
+                    // Luăm ziua (ex: Luni)
+                    let numeZi = new Date(data.daily.time[i]).toLocaleDateString('ro-RO', {weekday: 'short'});
+                    let tempZi = Math.round(data.daily.temperature_2m_max[i]);
+                    htmlZile += `<div class="text-center"><strong>${numeZi}</strong><br>${tempZi}°</div>`;
+                }
+                document.getElementById('meteo-saptamana').innerHTML = htmlZile;
+            }
+        } catch (e) {
+            document.getElementById('meteo-temp').innerText = "--°C";
+            document.getElementById('meteo-descriere').innerText = "Nu sunt date";
+        }
+    }
+
+    async function incarcaVremeaSiJurnalul() {
+        const dataInput = document.getElementById('jurnal-data');
+        if (!dataInput.value) dataInput.valueAsDate = new Date();
+        
+        await actualizeazaVremeaPentruData(dataInput.value);
+        await incarcaTabelJurnal();
+    }
+
+    async function incarcaTabelJurnal() {
+        const res = await fetch('/jurnal/');
+        jurnalGlobal = await res.json();
+        filtreazaJurnal(); // O afișăm prin filtru, ca să meargă bara de căutare
+    }
+
+    function filtreazaJurnal() {
+        const termen = document.getElementById('input-cautare').value.toLowerCase();
+        // Citim anul selectat din meniul de sus (ex: "2026")
+        const anSelectat = document.getElementById('filtru-an').value; 
+        
+        const tabel = document.getElementById('tabel-jurnal');
+        tabel.innerHTML = '';
+
+        jurnalGlobal.forEach(lucrare => {
+            let tarla = lucrare.tarla_parcela ? lucrare.tarla_parcela.toLowerCase() : "";
+            let actiune = lucrare.lucrare ? lucrare.lucrare.toLowerCase() : "";
+            
+            // Extragem anul din data lucrării (ex: din "2026-04-07" luăm doar "2026")
+            let anLucrare = lucrare.data_operatiune ? lucrare.data_operatiune.split('-')[0] : "";
+            
+            // Verificăm dacă se potrivește cu textul căutat ȘI cu anul selectat
+            let sePotrivesteText = tarla.includes(termen) || actiune.includes(termen);
+            let sePotrivesteAn = (anLucrare === anSelectat);
+
+            if (sePotrivesteText && sePotrivesteAn) {
+                let dataFrumoasa = lucrare.data_operatiune.split('-').reverse().join('-');
+                tabel.innerHTML += `
+                    <tr>
+                        <td class="fw-bold align-middle"><i class="bi bi-calendar-event text-primary"></i> ${dataFrumoasa}</td>
+                        <td class="align-middle"><i class="bi bi-geo-alt text-danger"></i> ${lucrare.tarla_parcela}</td>
+                        <td class="fw-bold align-middle">${lucrare.lucrare}</td>
+                        <td class="text-muted align-middle"><span class="badge bg-light text-dark border">${lucrare.temperatura}</span> ${lucrare.vremea}</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm text-danger border-0" onclick="stergeLucrare(${lucrare.id})" title="Șterge">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+        });
+    }
+
+    async function salveazaJurnal() {
+        const dataOp = document.getElementById('jurnal-data').value;
+        const tarla = document.getElementById('jurnal-tarla').value;
+        const lucrare = document.getElementById('jurnal-lucrare').value;
+
+        if(!tarla || !lucrare) return alert("Completează Tarla și Lucrarea!");
+
+        const response = await fetch('/jurnal/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data_operatiune: dataOp, tarla_parcela: tarla,
+                lucrare: lucrare, temperatura: tempCurenta, vremea: vremeCurenta      
+            })
+        });
+
+        if(response.ok) {
+            document.getElementById('jurnal-tarla').value = '';
+            document.getElementById('jurnal-lucrare').value = '';
+            incarcaTabelJurnal(); 
+        }
+    }
+
+    async function stergeLucrare(id) {
+        if(confirm("Ștergi această lucrare?")) {
+            const res = await fetch(`/jurnal/${id}`, { method: 'DELETE' });
+            if(res.ok) incarcaTabelJurnal();
+        }
+    }
+
+   
+
+
+
     
     window.onload = incarcaDate;
 </script>

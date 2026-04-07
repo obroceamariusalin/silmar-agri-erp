@@ -84,3 +84,19 @@ class BilantArendas(BaseModel):
     total_achitat_kg: float
     rest_de_plata_kg: float
     istoric_plati: List[PlataResponse]
+
+class JurnalCampBase(BaseModel):
+    data_operatiune: str
+    tarla_parcela: str
+    lucrare: str
+    temperatura: str
+    vremea: str
+
+class JurnalCampCreate(JurnalCampBase):
+    pass
+
+class JurnalCampResponse(JurnalCampBase):
+    id: int
+    
+    class Config:
+        from_attributes = True

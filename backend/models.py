@@ -48,3 +48,13 @@ class PreferintaAnuala(Base):
     tip_cereala = Column(String, default="grau") 
     
     arendas = relationship("Arendas", back_populates="preferinte")
+
+class JurnalCamp(Base):
+    __tablename__ = "jurnal_camp"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    data_operatiune = Column(String)  
+    tarla_parcela = Column(String)    
+    lucrare = Column(String)          
+    temperatura = Column(String)      
+    vremea = Column(String)           

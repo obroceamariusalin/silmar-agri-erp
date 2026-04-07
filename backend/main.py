@@ -428,6 +428,32 @@ def salveaza_preferinta(arendas_id: int, pref: schemas.PreferintaAnualaCreate, d
     db.commit()
     return {"mesaj": "Preferința a fost actualizată!"}
 
+
+# --- ADĂUGARE ÎN JURNALUL DE CÂMP ---
+@app.post("/jurnal/", response_model=schemas.JurnalCampResponse)
+def adauga_jurnal(intrare: schemas.JurnalCampCreate, db: Session = Depends(get_db)):
+    noua_intrare = models.JurnalCamp(**intrare.model_dump())
+    db.add(noua_intrare)
+    db.commit()
+    db.refresh(noua_intrare)
+    return noua_intrare
+
+# --- CITIRE JURNAL DE CÂMP ---
+@app.get("/jurnal/", response_model=list[schemas.JurnalCampResponse])
+def citeste_jurnal(db: Session = Depends(get_db)):
+    return db.query(models.JurnalCamp).order_by(models.JurnalCamp.id.desc()).all()
+
+
+# --- ȘTERGERE JURNAL DE CÂMP ---
+@app.delete("/jurnal/{lucrare_id}")
+def sterge_jurnal(lucrare_id: int, db: Session = Depends(get_db)):
+    lucrare = db.query(models.JurnalCamp).filter(models.JurnalCamp.id == lucrare_id).first()
+    if not lucrare:
+        raise HTTPException(status_code=404, detail="Lucrarea nu a fost gasita")
+    
+    db.delete(lucrare)
+    db.commit()
+    return {"mesaj": "Lucrare ștearsă cu succes!"} 
     
     
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
