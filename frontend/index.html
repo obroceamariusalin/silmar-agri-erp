@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Silmar Farm ERP Pro</title>
+    <title>Silmar Solution SRL</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
@@ -202,6 +202,25 @@
                 <i class="bi bi-person-plus"></i> Adaugă Arendaș
             </button>
         </div>
+
+        <div id="bara-actiune-multipla" class="bg-white p-3 mb-4 border border-warning rounded shadow-sm d-none align-items-center justify-content-between">
+            <span class="fw-bold text-dark"><i class="bi bi-check2-square text-success fs-5"></i> <span id="numar-selectati">0</span> arendași selectați</span>
+            <div class="input-group w-50">
+                <select id="select-multiplu-an" class="form-select border-warning" style="max-width: 120px;">
+                    <option value="2024">2024</option>
+                    <option value="2025">2025</option>
+                    <option value="2026" selected>2026</option>
+                    <option value="2027">2027</option>
+                </select>
+                
+                <select id="select-multiplu-cereala" class="form-select border-warning">
+                    <option value="grau">🌾 Grâu (Toți)</option>
+                    <option value="porumb">🌽 Porumb (Toți)</option>
+                </select>
+                <button id="btn-salvare-multipla" class="btn btn-warning fw-bold" onclick="salveazaPreferinteMultiple()">Aplică</button>
+            </div>
+        </div>
+
         <div class="row" id="container-dosare"></div>
     </div>
 
@@ -293,12 +312,9 @@
         const res = await fetch('/arendasi/');
         arendasiGlobal = await res.json();
         populeazaTabele(); 
-        
-        // --- LINIILE NOI: Citim memoria și mutăm utilizatorul ---
         const ecranSalvat = localStorage.getItem('ecranSalvat') || 'ecran-bilant';
         schimbaEcran(ecranSalvat);
-        
-        // Dacă a dat refresh direct pe Jurnal, forțăm și încărcarea vremii!
+
         if (ecranSalvat === 'ecran-jurnal') {
             incarcaVremeaSiJurnalul();
         }
@@ -355,9 +371,13 @@ function populeazaTabele() {
             if (cDosare) {
                 cDosare.innerHTML += `
                     <div class="col-md-4 mb-3">
-                        <div class="card shadow-sm border-0">
+                        <div class="card shadow-sm border-0 position-relative">
+                            <div class="form-check position-absolute top-0 end-0 m-2">
+                                <input class="form-check-input border-secondary checkbox-dosar" type="checkbox" value="${om.id}" onchange="actualizeazaBaraMultipla()" style="transform: scale(1.4); cursor: pointer;">
+                            </div>
+                            
                             <div class="card-body border-start border-4 ${tipCereala === 'grau' ? 'border-warning' : 'border-success'}">
-                                <h5 class="fw-bold">${om.nume_complet}</h5>
+                                <h5 class="fw-bold pe-4">${om.nume_complet}</h5>
                                 <p class="small text-muted mb-1"><i class="bi bi-basket"></i> Vrea: <strong>${eticheta}</strong></p>
                                 <p class="small mb-3">Rest plată: <span class="text-danger fw-bold">${restDePlata.toFixed(0)} kg</span></p>
                                 <button class="btn btn-success w-100 btn-sm" onclick="deschideDosar(${om.id})">Administrează Dosar</button>
@@ -376,6 +396,7 @@ function populeazaTabele() {
         if (stHectare) stHectare.innerText = globalHa.toFixed(2) + " HA";
         if (stGrau) stGrau.innerText = globalGrau.toLocaleString() + " kg";
         if (stPorumb) stPorumb.innerText = globalPorumb.toLocaleString() + " kg";
+        if(typeof actualizeazaBaraMultipla === "function") actualizeazaBaraMultipla();
     }
 
     function filtreazaDate() {
@@ -472,33 +493,30 @@ function populeazaTabele() {
 
         if (id === 'ecran-bilant') {
             zonaStatistici.style.display = 'flex';
-            containerAn.style.display = 'block'; // Arătăm anii
+            containerAn.style.display = 'block'; 
             inputCautare.placeholder = "Caută arendaș după nume sau CNP...";
         } else if (id === 'ecran-arendasi') {
             zonaStatistici.style.display = 'none';
-            containerAn.style.display = 'none'; // Ascundem anii la Baza de Date
+            containerAn.style.display = 'block';
             inputCautare.placeholder = "Caută arendaș după nume sau CNP...";
         } else if (id === 'ecran-jurnal') {
             zonaStatistici.style.display = 'none';
             containerAn.style.display = 'block'; 
             inputCautare.placeholder = "Caută în jurnal (Tarla sau Lucrare)...";
         }
-        
-        // Când schimbi ecranul, golim căsuța de căutare
+
         inputCautare.value = "";
         trateazaCautare();
     }
 
     function trateazaCautare() {
         if (ecranCurent === 'ecran-jurnal') {
-            filtreazaJurnal(); // Dacă suntem la Jurnal, filtrăm jurnalul
+            filtreazaJurnal(); 
         } else {
-            filtreazaDate();   // Altfel, filtrăm arendașii
+            filtreazaDate();   
         }
     }
 
-
-    // --- Funcția pentru ADĂUGARE ARENDAȘ NOU ---
     async function salveazaArendasNou() {
         const nume = document.getElementById('input-nume-nou').value;
         const cnp = document.getElementById('input-cnp-nou').value || ""; 
@@ -539,7 +557,6 @@ function populeazaTabele() {
         }
     }
 
-    // --- Funcția pentru EDITARE DATE PERSONALE ---
     async function promptEditareOm() {
         if (!idCurent) return;
         const om = arendasiGlobal.find(x => x.id === idCurent);
@@ -560,7 +577,6 @@ function populeazaTabele() {
         }
     }
 
-    // --- Funcția pentru EDITARE TEREN ---
     async function editTeren(idTeren) {
         const suprafataNoua = prompt("Introdu noua suprafață (în hectare):");
         if (suprafataNoua) {
@@ -576,7 +592,6 @@ function populeazaTabele() {
         }
     }
 
-    // --- Funcția pentru ADĂUGARE TEREN NOU DIN DOSAR ---
     async function arataFormTeren() {
         const tarlaua = prompt("Număr Tarlaua:");
         const parcela = prompt("Număr Parcela:");
@@ -599,7 +614,6 @@ function populeazaTabele() {
         }
     }
 
-    // --- Funcția pentru ADAUGARE PLATĂ ---
     async function salveazaPlata() {
         if (!idCurent) return;
         const kg = document.getElementById('plata-kg').value;
@@ -628,7 +642,6 @@ function populeazaTabele() {
         }
     }
 
-// --- Funcția pentru ȘTERGERE PLATĂ ---
     async function stergePlata(idPlata) {
         if (confirm("Ești sigur că vrei să anulezi această plată? Restul de plată va crește la loc.")) {
             const response = await fetch(`/plati/${idPlata}`, { method: 'DELETE' });
@@ -641,7 +654,6 @@ function populeazaTabele() {
         }
     }
 
-    // --- Funcția pentru UPLOAD DOCUMENT ---
     async function uploadDocument() {
         if (!idCurent) return;
         const fileInput = document.getElementById('fileInput');
@@ -668,8 +680,6 @@ function populeazaTabele() {
     }
 
 
-
-    // --- ȘTERGE ARENDAȘ ---
     async function stergeOmCurent() {
         if (!idCurent) return;
         const om = arendasiGlobal.find(x => x.id === idCurent);
@@ -686,7 +696,6 @@ function populeazaTabele() {
         }
     }
 
-    // --- ȘTERGERE TEREN INDIVIDUAL ---
     async function stergeTeren(idTeren) {
         if (confirm("Ești sigur că vrei să elimini această parcelă?")) {
             const response = await fetch(`/terenuri/${idTeren}`, { method: 'DELETE' });
@@ -697,7 +706,6 @@ function populeazaTabele() {
         }
     }
 
-    // --- ȘTERGERE DOCUMENT FIZIC ---
     async function stergeDocument(numeFisier) {
         if (confirm("Ești sigur că vrei să ștergi definitiv acest document?")) {
             const response = await fetch(`/arendasi/${idCurent}/documente/${numeFisier}`, { method: 'DELETE' });
@@ -774,7 +782,7 @@ function descarcaExcel() {
 
 let tempCurenta = "--";
     let vremeCurenta = "--";
-    let jurnalGlobal = []; // Ține minte jurnalul ca să îl putem filtra
+    let jurnalGlobal = []; 
 
     const coduriVreme = {
         0: "Senin ☀️", 1: "Senin 🌤️", 2: "Parțial Noros ⛅", 3: "Înnorat ☁️",
@@ -787,7 +795,7 @@ let tempCurenta = "--";
         await actualizeazaVremeaPentruData(this.value);
     });
 
-    // Funcție ca să adunăm zile la o dată
+   
     function adaugaZile(dataStr, zile) {
         let d = new Date(dataStr);
         d.setDate(d.getDate() + zile);
@@ -800,15 +808,13 @@ let tempCurenta = "--";
         document.getElementById('meteo-saptamana').innerHTML = ""; 
         
         try {
-            const dataFinala = adaugaZile(dataSelectata, 6); // Cerem pe 7 zile (ziua aleasă + încă 6)
-            
-            // Am adăugat "windspeed_10m_max" ca să prindem vântul!
+            const dataFinala = adaugaZile(dataSelectata, 6); 
+
             const url = `https://api.open-meteo.com/v1/forecast?latitude=44.51&longitude=23.38&daily=temperature_2m_max,weathercode,windspeed_10m_max&timezone=auto&start_date=${dataSelectata}&end_date=${dataFinala}`;
             const res = await fetch(url);
             const data = await res.json();
             
             if(data.daily && data.daily.time.length > 0) {
-                // Setăm ziua principală (Index 0)
                 tempCurenta = data.daily.temperature_2m_max[0] + "°C";
                 vremeCurenta = coduriVreme[data.daily.weathercode[0]] || "Variabil";
                 
@@ -816,10 +822,8 @@ let tempCurenta = "--";
                 document.getElementById('meteo-descriere').innerText = vremeCurenta;
                 document.getElementById('meteo-vant').innerText = data.daily.windspeed_10m_max[0];
 
-                // Setăm restul de 6 zile jos
                 let htmlZile = "";
                 for(let i=1; i<data.daily.time.length; i++) {
-                    // Luăm ziua (ex: Luni)
                     let numeZi = new Date(data.daily.time[i]).toLocaleDateString('ro-RO', {weekday: 'short'});
                     let tempZi = Math.round(data.daily.temperature_2m_max[i]);
                     htmlZile += `<div class="text-center"><strong>${numeZi}</strong><br>${tempZi}°</div>`;
@@ -843,12 +847,11 @@ let tempCurenta = "--";
     async function incarcaTabelJurnal() {
         const res = await fetch('/jurnal/');
         jurnalGlobal = await res.json();
-        filtreazaJurnal(); // O afișăm prin filtru, ca să meargă bara de căutare
+        filtreazaJurnal(); 
     }
 
     function filtreazaJurnal() {
         const termen = document.getElementById('input-cautare').value.toLowerCase();
-        // Citim anul selectat din meniul de sus (ex: "2026")
         const anSelectat = document.getElementById('filtru-an').value; 
         
         const tabel = document.getElementById('tabel-jurnal');
@@ -857,11 +860,8 @@ let tempCurenta = "--";
         jurnalGlobal.forEach(lucrare => {
             let tarla = lucrare.tarla_parcela ? lucrare.tarla_parcela.toLowerCase() : "";
             let actiune = lucrare.lucrare ? lucrare.lucrare.toLowerCase() : "";
-            
-            // Extragem anul din data lucrării (ex: din "2026-04-07" luăm doar "2026")
+ 
             let anLucrare = lucrare.data_operatiune ? lucrare.data_operatiune.split('-')[0] : "";
-            
-            // Verificăm dacă se potrivește cu textul căutat ȘI cu anul selectat
             let sePotrivesteText = tarla.includes(termen) || actiune.includes(termen);
             let sePotrivesteAn = (anLucrare === anSelectat);
 
@@ -917,6 +917,57 @@ let tempCurenta = "--";
    
 
 
+    function actualizeazaBaraMultipla() {
+        const checkboxes = document.querySelectorAll('.checkbox-dosar:checked');
+        const bara = document.getElementById('bara-actiune-multipla');
+        const numar = document.getElementById('numar-selectati');
+
+        if (!bara || !numar) return;
+
+        if (checkboxes.length > 0) {
+            bara.classList.remove('d-none');
+            bara.classList.add('d-flex');
+            numar.innerText = checkboxes.length;
+        } else {
+            bara.classList.add('d-none');
+            bara.classList.remove('d-flex');
+        }
+    }
+
+    async function salveazaPreferinteMultiple() {
+        const checkboxes = document.querySelectorAll('.checkbox-dosar:checked');
+        if (checkboxes.length === 0) return;
+
+        const anSelectat = parseInt(document.getElementById('select-multiplu-an').value) || 2026;
+        const cerealaAlesa = document.getElementById('select-multiplu-cereala').value;
+        
+        const ids = Array.from(checkboxes).map(cb => cb.value);
+        
+        const btn = document.getElementById('btn-salvare-multipla');
+        const textInitial = btn.innerText;
+        btn.innerText = "Se salvează...";
+        btn.disabled = true;
+
+        try {
+            const cereri = ids.map(id => {
+                return fetch(`/arendasi/${id}/preferinte/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ "anul_agricol": anSelectat, "tip_cereala": cerealaAlesa })
+                });
+            });
+
+            await Promise.all(cereri);
+
+            await incarcaDate();
+            alert(`Gata! Am setat ${cerealaAlesa.toUpperCase()} pentru anul ${anSelectat} la ${ids.length} arendași.`);
+        } catch (e) {
+            alert("A apărut o eroare la salvarea multiplă!");
+        } finally {
+            btn.innerText = textInitial;
+            btn.disabled = false;
+        }
+    }
 
     
     window.onload = incarcaDate;

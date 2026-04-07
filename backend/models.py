@@ -46,7 +46,6 @@ class PreferintaAnuala(Base):
     arendas_id = Column(Integer, ForeignKey("arendasi.id"))
     anul_agricol = Column(Integer)
     tip_cereala = Column(String, default="grau") 
-    
     arendas = relationship("Arendas", back_populates="preferinte")
 
 class JurnalCamp(Base):

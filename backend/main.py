@@ -154,7 +154,6 @@ def obtine_bilant(arendas_id: int, db: Session = Depends(get_db)):
         "istoric_plati": om.plati
     }
 
-
 # ---  EDITARE ARENDAȘ ---
 @app.patch("/arendasi/{arendas_id}", response_model=schemas.ArendasResponse)
 def editeaza_arendas(arendas_id: int, date_noi: schemas.ArendasUpdate, db: Session = Depends(get_db)):
@@ -429,7 +428,6 @@ def salveaza_preferinta(arendas_id: int, pref: schemas.PreferintaAnualaCreate, d
     return {"mesaj": "Preferința a fost actualizată!"}
 
 
-# --- ADĂUGARE ÎN JURNALUL DE CÂMP ---
 @app.post("/jurnal/", response_model=schemas.JurnalCampResponse)
 def adauga_jurnal(intrare: schemas.JurnalCampCreate, db: Session = Depends(get_db)):
     noua_intrare = models.JurnalCamp(**intrare.model_dump())
@@ -438,13 +436,11 @@ def adauga_jurnal(intrare: schemas.JurnalCampCreate, db: Session = Depends(get_d
     db.refresh(noua_intrare)
     return noua_intrare
 
-# --- CITIRE JURNAL DE CÂMP ---
 @app.get("/jurnal/", response_model=list[schemas.JurnalCampResponse])
 def citeste_jurnal(db: Session = Depends(get_db)):
     return db.query(models.JurnalCamp).order_by(models.JurnalCamp.id.desc()).all()
 
 
-# --- ȘTERGERE JURNAL DE CÂMP ---
 @app.delete("/jurnal/{lucrare_id}")
 def sterge_jurnal(lucrare_id: int, db: Session = Depends(get_db)):
     lucrare = db.query(models.JurnalCamp).filter(models.JurnalCamp.id == lucrare_id).first()
