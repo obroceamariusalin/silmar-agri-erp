@@ -35,6 +35,8 @@ class Plata(Base):
     cantitate_kg = Column(Float)
     anul_agricol = Column(Integer)
     data_operatiune = Column(DateTime, default=datetime.datetime.utcnow)
+    produs = Column(String, default="grau")
+    observatii = Column(String, nullable=True)
 
     arendas_id = Column(Integer, ForeignKey("arendasi.id"))
     beneficiar = relationship("Arendas", back_populates="plati")

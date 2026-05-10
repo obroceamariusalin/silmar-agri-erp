@@ -210,6 +210,46 @@ def extrage_localitate(adresa: str):
     
     return adresa.split(',')[0].strip()
 
+# --- RUTĂ PENTRU PLATĂ TOTALĂ (INDIVIDUALĂ SAU MULTIPLĂ) ---
+@app.post("/arendasi/plata-totala-multipla/")
+def plata_totala_multipla(date: dict, db: Session = Depends(get_db)):
+    ids = date.get("ids", [])
+    anul_agricol = date.get("an", 2026)
+    
+    if not ids:
+        raise HTTPException(status_code=400, detail="Nu a fost selectat niciun arendaș.")
+
+    for arendas_id in ids:
+        om = db.query(models.Arendas).filter(models.Arendas.id == arendas_id).first()
+        if not om:
+            continue
+
+        total_ha = sum(t.suprafata_ha for t in om.terenuri)
+        total_datorat = total_ha * 600
+
+        total_platit = sum(p.cantitate_kg for p in om.plati if p.anul_agricol == anul_agricol)
+        
+        rest_de_plata = total_datorat - total_platit
+
+        if rest_de_plata > 0:
+            pref = db.query(models.PreferintaAnuala).filter(
+                models.PreferintaAnuala.arendas_id == arendas_id,
+                models.PreferintaAnuala.anul_agricol == anul_agricol
+            ).first()
+            produs_ales = pref.tip_cereala if pref else "grau"
+
+            noua_plata = models.Plata(
+                arendas_id=arendas_id,
+                anul_agricol=anul_agricol,
+                cantitate_kg=rest_de_plata,
+                produs=produs_ales,
+                observatii="Plată totală automată (Bulk)"
+            )
+            db.add(noua_plata)
+
+    db.commit()
+    return {"mesaj": f"Plata a fost procesată cu succes pentru {len(ids)} arendași!"}
+
 # --- EXPORT BORDEROU EXCEL ---
 @app.get("/borderou/descarca-excel")
 def descarca_borderou_excel(an: int = 2026, db: Session = Depends(get_db)):

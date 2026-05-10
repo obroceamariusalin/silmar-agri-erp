@@ -198,14 +198,20 @@
     <div id="ecran-arendasi" class="ecran" style="display:none;">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h4 class="mb-0">Dosare Arendași</h4>
-            <button class="btn btn-primary shadow-sm" onclick="modalAdaugaArendas.show()">
-                <i class="bi bi-person-plus"></i> Adaugă Arendaș
-            </button>
+            <div>
+                <button id="btn-sortare" class="btn btn-outline-secondary shadow-sm me-2" onclick="toggleSortare()">
+                    <i class="bi bi-sort-alpha-down"></i> Sortează A-Z
+                </button>
+                <button class="btn btn-primary shadow-sm" onclick="modalAdaugaArendas.show()">
+                    <i class="bi bi-person-plus"></i> Adaugă Arendaș
+                </button>
+            </div>
         </div>
 
         <div id="bara-actiune-multipla" class="bg-white p-3 mb-4 border border-warning rounded shadow-sm d-none align-items-center justify-content-between">
             <span class="fw-bold text-dark"><i class="bi bi-check2-square text-success fs-5"></i> <span id="numar-selectati">0</span> arendași selectați</span>
             <div class="input-group w-50">
+                
                 <select id="select-multiplu-an" class="form-select border-warning" style="max-width: 120px;">
                     <option value="2024">2024</option>
                     <option value="2025">2025</option>
@@ -218,6 +224,9 @@
                     <option value="porumb">🌽 Porumb (Toți)</option>
                 </select>
                 <button id="btn-salvare-multipla" class="btn btn-warning fw-bold" onclick="salveazaPreferinteMultiple()">Aplică</button>
+                <button id="btn-plata-multipla" class="btn btn-success fw-bold ms-2 rounded" onclick="plataTotalaMultipla()">
+                    <i class="bi bi-check-all"></i> Plătește Tot
+                </button>
             </div>
         </div>
 
@@ -307,10 +316,13 @@
     
     const modalDosar = new bootstrap.Modal(document.getElementById('modalDosar'));
     const modalAdaugaArendas = new bootstrap.Modal(document.getElementById('modalAdaugaArendas'));
+    let arendasiOriginali = []; 
+    let ordonatAZ = false;
 
    async function incarcaDate() {
         const res = await fetch('/arendasi/');
         arendasiGlobal = await res.json();
+        arendasiOriginali = [...arendasiGlobal];
         populeazaTabele(); 
         const ecranSalvat = localStorage.getItem('ecranSalvat') || 'ecran-bilant';
         schimbaEcran(ecranSalvat);
@@ -966,6 +978,62 @@ let tempCurenta = "--";
         } finally {
             btn.innerText = textInitial;
             btn.disabled = false;
+        }
+    }
+
+
+    function toggleSortare() {
+        ordonatAZ = !ordonatAZ;
+        const btn = document.getElementById('btn-sortare');
+        
+        if (ordonatAZ) {
+            btn.innerHTML = '<i class="bi bi-sort-alpha-down-alt"></i> Sortează Implicit';
+            btn.classList.replace('btn-outline-secondary', 'btn-secondary');
+            arendasiGlobal.sort((a, b) => a.nume_complet.localeCompare(b.nume_complet));
+        } else {
+            btn.innerHTML = '<i class="bi bi-sort-alpha-down"></i> Sortează A-Z';
+            btn.classList.replace('btn-secondary', 'btn-outline-secondary');
+            arendasiGlobal = [...arendasiOriginali];
+        }
+        
+        populeazaTabele(); 
+    }
+
+    async function plataTotalaMultipla() {
+        const checkboxes = document.querySelectorAll('.checkbox-dosar:checked');
+        if (checkboxes.length === 0) return;
+
+        const anSelectat = parseInt(document.getElementById('select-multiplu-an').value) || 2026;
+        const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+        
+        const confirmare = confirm(`Ești sigur că vrei să înregistrezi PLATA COMPLETĂ pentru anul ${anSelectat} la toți cei ${ids.length} arendași?`);
+        if (!confirmare) return;
+
+        const btn = document.getElementById('btn-plata-multipla');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Se procesează...';
+
+        try {
+            const response = await fetch('/arendasi/plata-totala-multipla/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: ids, an: anSelectat })
+            });
+
+            if (response.ok) {
+                alert("Toate plățile au fost înregistrate! Rest de plată: 0 kg.");
+                await incarcaDate(); 
+            } else {
+                alert("Eroare la procesarea plății pe server.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Eroare de rețea!");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-all"></i> Plătește Tot';
+            checkboxes.forEach(cb => cb.checked = false);
+            actualizeazaBaraMultipla();
         }
     }
 

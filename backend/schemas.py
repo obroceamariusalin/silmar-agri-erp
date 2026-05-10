@@ -68,6 +68,8 @@ class ArendasResponse(BaseModel):
 class PlataCreate(BaseModel):
     cantitate_kg: float
     anul_agricol: int
+    produs: Optional[str] = None
+    observatii: Optional[str] = None
 
 class PlataResponse(BaseModel):
     id: int

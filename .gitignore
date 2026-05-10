@@ -1,4 +1,5 @@
 backend/venv/
 backend/__pycache__/
-backend/*.db
+*.db
 backend/acte_salvate/
+.env
