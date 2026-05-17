@@ -206,6 +206,11 @@
                 <button id="btn-sortare" class="btn btn-outline-secondary shadow-sm me-2" onclick="toggleSortare()">
                     <i class="bi bi-sort-alpha-down"></i> Sortează A-Z
                 </button>
+
+                <button class="btn btn-info shadow-sm me-2 fw-bold text-white" onclick="modalContractRapid.show()">
+                    <i class="bi bi-lightning-charge-fill"></i> Contract Rapid
+                </button>
+
                 <button class="btn btn-primary shadow-sm" onclick="modalAdaugaArendas.show()">
                     <i class="bi bi-person-plus"></i> Adaugă Arendaș
                 </button>
@@ -312,6 +317,71 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="modalContractRapid" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title"><i class="bi bi-lightning-charge"></i> Generator Rapid de Contracte</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-4">Completează datele pentru a genera instant un contract Word.</p>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="small fw-bold">Nume Complet</label>
+                            <input type="text" id="cr-nume" class="form-control" placeholder="Ion Popescu">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small fw-bold">CNP</label>
+                            <input type="text" id="cr-cnp" class="form-control" placeholder="1... sau 2...">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="small fw-bold">Adresă Domiciliu</label>
+                            <input type="text" id="cr-adresa" class="form-control" placeholder="Comuna X, Sat Y, Strada Z">
+                        </div>
+                        
+                        <h6 class="mt-4 mb-2 border-bottom pb-1 text-primary"><i class="bi bi-person-vcard"></i> Date Buletin (C.I.)</h6>
+                        <div class="col-md-3">
+                            <label class="small text-muted">Seria</label>
+                            <input type="text" id="cr-seria" class="form-control" placeholder="DX">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small text-muted">Număr</label>
+                            <input type="text" id="cr-numar" class="form-control" placeholder="123456">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small text-muted">Eliberat de</label>
+                            <input type="text" id="cr-eliberat" class="form-control" placeholder="SPCLEP...">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small text-muted">Data eliberării</label>
+                            <input type="text" id="cr-data" class="form-control" placeholder="DD.MM.YYYY">
+                        </div>
+
+                        <h6 class="mt-4 mb-2 border-bottom pb-1 text-success"><i class="bi bi-map"></i> Date Teren Arendat</h6>
+                        
+                        <div id="container-terenuri-rapid">
+                            <div class="row g-2 mb-2 rand-teren">
+                                <div class="col-3"><input type="text" class="form-control cr-tarla" placeholder="Tarla"></div>
+                                <div class="col-3"><input type="text" class="form-control cr-parcela" placeholder="Parcela"></div>
+                                <div class="col-4"><input type="text" class="form-control cr-ha" placeholder="Suprafața (HA)"></div>
+                                <div class="col-2">
+                                    <button class="btn btn-danger w-100 btn-sm" onclick="this.parentElement.parentElement.remove()"><i class="bi bi-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-success mt-1 fw-bold" onclick="adaugaRandTerenRapid()">+ Mai adaugă un teren</button>
+                    </div>
+
+                    <button class="btn btn-info w-100 mt-4 fw-bold text-white shadow-sm" onclick="genereazaContractRapidPeLoc()">
+                        <i class="bi bi-download"></i> Generează și Descarcă
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -1047,6 +1117,78 @@ let tempCurenta = "--";
           .then(reg => console.log('PWA Inregistrat!', reg))
           .catch(err => console.log('Eroare PWA:', err));
       });
+    }
+
+
+const modalContractRapid = new bootstrap.Modal(document.getElementById('modalContractRapid'));
+
+    // 1. Funcția care adaugă un rând nou de teren în formular
+    function adaugaRandTerenRapid() {
+        const container = document.getElementById('container-terenuri-rapid');
+        const html = `
+            <div class="row g-2 mb-2 rand-teren">
+                <div class="col-3"><input type="text" class="form-control cr-tarla" placeholder="Tarla"></div>
+                <div class="col-3"><input type="text" class="form-control cr-parcela" placeholder="Parcela"></div>
+                <div class="col-4"><input type="text" class="form-control cr-ha" placeholder="Suprafața (HA)"></div>
+                <div class="col-2"><button class="btn btn-danger w-100 btn-sm" onclick="this.parentElement.parentElement.remove()"><i class="bi bi-trash"></i></button></div>
+            </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+    }
+
+    // 2. Funcția actualizată care trimite lista la server
+    async function genereazaContractRapidPeLoc() {
+        // Colectăm toate terenurile din pagină într-o listă
+        let listaTerenuri = [];
+        document.querySelectorAll('#container-terenuri-rapid .rand-teren').forEach(rand => {
+            let tarla = rand.querySelector('.cr-tarla').value || "...";
+            let parcela = rand.querySelector('.cr-parcela').value || "...";
+            let ha = rand.querySelector('.cr-ha').value || "0";
+            listaTerenuri.push({ tarla: tarla, parcela: parcela, ha: ha });
+        });
+
+        const payload = {
+            nume: document.getElementById('cr-nume').value || "NECUNOSCUT",
+            cnp: document.getElementById('cr-cnp').value || "",
+            adresa: document.getElementById('cr-adresa').value || "...",
+            ci_seria: document.getElementById('cr-seria').value || "...",
+            ci_numar: document.getElementById('cr-numar').value || "...",
+            ci_eliberat: document.getElementById('cr-eliberat').value || "...",
+            ci_data: document.getElementById('cr-data').value || "...",
+            terenuri: listaTerenuri // <- Acum trimitem toată lista
+        };
+
+        const btn = document.querySelector('#modalContractRapid .btn-info');
+        btn.innerHTML = "Se procesează...";
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/genereaza-contract-rapid/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Contract_${payload.nume}.docx`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                
+                modalContractRapid.hide();
+            } else {
+                alert("A apărut o eroare pe server la generarea documentului.");
+            }
+        } catch (error) {
+            alert("Eroare de rețea.");
+        } finally {
+            btn.innerHTML = '<i class="bi bi-download"></i> Generează și Descarcă';
+            btn.disabled = false;
+        }
     }
 
     

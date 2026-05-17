@@ -102,3 +102,20 @@ class JurnalCampResponse(JurnalCampBase):
     
     class Config:
         from_attributes = True
+
+
+
+class TerenRapid(BaseModel):
+    tarla: str
+    parcela: str
+    ha: str
+
+class ContractRapidCreate(BaseModel):
+    nume: str
+    cnp: str
+    ci_seria: str
+    ci_numar: str
+    ci_eliberat: str
+    ci_data: str
+    adresa: str
+    terenuri: List[TerenRapid]
