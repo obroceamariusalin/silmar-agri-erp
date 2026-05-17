@@ -1122,7 +1122,6 @@ let tempCurenta = "--";
 
 const modalContractRapid = new bootstrap.Modal(document.getElementById('modalContractRapid'));
 
-    // 1. Funcția care adaugă un rând nou de teren în formular
     function adaugaRandTerenRapid() {
         const container = document.getElementById('container-terenuri-rapid');
         const html = `
@@ -1135,9 +1134,7 @@ const modalContractRapid = new bootstrap.Modal(document.getElementById('modalCon
         container.insertAdjacentHTML('beforeend', html);
     }
 
-    // 2. Funcția actualizată care trimite lista la server
     async function genereazaContractRapidPeLoc() {
-        // Colectăm toate terenurile din pagină într-o listă
         let listaTerenuri = [];
         document.querySelectorAll('#container-terenuri-rapid .rand-teren').forEach(rand => {
             let tarla = rand.querySelector('.cr-tarla').value || "...";
@@ -1154,7 +1151,7 @@ const modalContractRapid = new bootstrap.Modal(document.getElementById('modalCon
             ci_numar: document.getElementById('cr-numar').value || "...",
             ci_eliberat: document.getElementById('cr-eliberat').value || "...",
             ci_data: document.getElementById('cr-data').value || "...",
-            terenuri: listaTerenuri // <- Acum trimitem toată lista
+            terenuri: listaTerenuri 
         };
 
         const btn = document.querySelector('#modalContractRapid .btn-info');

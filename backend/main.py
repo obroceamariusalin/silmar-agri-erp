@@ -494,7 +494,6 @@ def sterge_jurnal(lucrare_id: int, db: Session = Depends(get_db)):
 
 @app.post("/genereaza-contract-rapid/")
 def genereaza_contract_rapid(date: schemas.ContractRapidCreate):
-    # 1. Inteligență pentru Gen
     gen_text, domiciliat_text, identificat_text = "domnul/doamna", "domiciliat(ă)", "identificat(ă)"
     if date.cnp and len(date.cnp) > 0:
         if date.cnp[0] in ['1', '5', '7', '3']:
@@ -502,29 +501,24 @@ def genereaza_contract_rapid(date: schemas.ContractRapidCreate):
         elif date.cnp[0] in ['2', '6', '8', '4']:
             gen_text, domiciliat_text, identificat_text = "doamna", "domiciliată", "identificată"
 
-    # 2. Generăm Lista de Terenuri (în MP) și Adunăm Hectarele
     linii_terenuri = []
     total_ha = 0.0
     
     for t in date.terenuri:
         try:
-            # Transformăm textul în număr cu virgulă mobilă
             ha_val = float(t.ha.replace(',', '.'))
             total_ha += ha_val
             # Calculăm metrii pătrați
             suprafata_mp = int(ha_val * 10000) 
         except:
             suprafata_mp = 0
-            
-        # Adăugăm la listă cu "mp" la final
         linii_terenuri.append(f"- Tarlaua {t.tarla}, parcela {t.parcela}, în suprafață de {suprafata_mp} mp")
             
     text_terenuri = "\n".join(linii_terenuri) if linii_terenuri else "Nu a fost adăugat niciun teren."
 
-    # 3. Pregătim înlocuirile
     placeholders = {
         "{{GEN}}": gen_text,
-        "{{NUME}}": date.nume.upper(),
+        "{{NUME}}": date.nume.title(),
         "{{DOMICILIAT}}": domiciliat_text,
         "{{IDENTIFICAT}}": identificat_text,
         "{{adresa}}": date.adresa,
@@ -538,8 +532,7 @@ def genereaza_contract_rapid(date: schemas.ContractRapidCreate):
     }
 
     doc = Document("template_contract.docx")
-    
-    # 4. Înlocuim textul
+
     for p in doc.paragraphs:
         for cheie, valoare in placeholders.items():
             if cheie in p.text:
@@ -553,7 +546,6 @@ def genereaza_contract_rapid(date: schemas.ContractRapidCreate):
                         if cheie in p.text:
                             p.text = p.text.replace(cheie, valoare)
 
-    # 5. Salvăm și trimitem
     nume_fisier = "acte_salvate/Contract_Rapid_Generat.docx"
     doc.save(nume_fisier)
 
