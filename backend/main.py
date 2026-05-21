@@ -18,6 +18,11 @@ import pdfplumber
 import re
 import io
 from docx import Document
+from docx.shared import Cm, Pt
+from docx.enum.section import WD_ORIENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from sqlalchemy import text
+from datetime import datetime
 
 
 Base.metadata.create_all(bind=engine)
@@ -52,6 +57,23 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# --- RUTĂ PENTRU REPARAREA BAZEI DE DATE ---
+@app.get("/repara-baza")
+def repara_db(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("ALTER TABLE arendasi ADD COLUMN nr_data_contract VARCHAR;"))
+        db.commit()
+    except Exception as e:
+        pass # Ignorăm dacă coloana există deja
+        
+    try:
+        db.execute(text("ALTER TABLE arendasi ADD COLUMN durata_contract VARCHAR DEFAULT '7';"))
+        db.commit()
+    except Exception as e:
+        pass # Ignorăm dacă coloana există deja
+        
+    return {"Mesaj": "Baza de date a fost reparată! Acum poți salva numărul și durata contractului."}
 
 
 # --- Ruta pentru a adăuga un Arendaș ---
@@ -329,6 +351,110 @@ def descarca_borderou_excel(an: int = 2026, db: Session = Depends(get_db)):
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 
+
+# --- EXPORT TABEL PRIMĂRIE ---
+@app.get("/descarca-tabel-primarie")
+def descarca_tabel_primarie(db: Session = Depends(get_db)):
+    arendasi = db.query(models.Arendas).all()
+
+    doc = Document()
+    
+    section = doc.sections[0]
+    new_width, new_height = section.page_height, section.page_width
+    section.orientation = WD_ORIENT.LANDSCAPE
+    section.page_width = new_width
+    section.page_height = new_height
+    section.left_margin = Cm(1)
+    section.right_margin = Cm(1)
+    section.top_margin = Cm(1)
+    section.bottom_margin = Cm(1)
+
+    p_antet = doc.add_paragraph()
+    run_antet = p_antet.add_run("JUDETUL DOLJ\nCOMUNA ARGETOAIA\nPRIMARIA COMUNEI ARGETOAIA\n")
+    run_antet.bold = True
+    doc.add_paragraph(f"NR. .................... din {datetime.now().strftime('%d.%m.%Y')}")
+   
+    p_titlu = doc.add_paragraph()
+    p_titlu.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_titlu = p_titlu.add_run("TABEL CENTRALIZATOR AL CONTRACTELOR DE ARENDA\nSILMAR SOLUTION SRL, CUI 49659242 = arendaș")
+    run_titlu.bold = True
+    
+    table = doc.add_table(rows=1, cols=13)
+    table.style = 'Table Grid'
+    
+    capete_tabel = [
+        "NR. CRT.", "NUME SI PRENUME ARENDATOR", "CNP", "NR./DATA CONTRACT DE ARENDA", 
+        "DURATA DE ARENDARE (ANI)", "SUPRAFATA TOTALA (Ha)", "Arabil (ha)", "Pasuni", 
+        "Fanete", "Vii", "Alte cat.", "Pruni", "TITULAR REGISTRUL AGRICOL"
+    ]
+    
+    hdr_cells = table.rows[0].cells
+    for i, text in enumerate(capete_tabel):
+        hdr_cells[i].text = text
+        for paragraph in hdr_cells[i].paragraphs:
+            for run in paragraph.runs:
+                run.font.bold = True
+                run.font.size = Pt(8)
+                
+    total_general_ha = 0
+    nr_crt = 1
+    arendasi_sortati = sorted(arendasi, key=lambda x: x.nume_complet)
+    
+    for om in arendasi_sortati:
+        suprafata_totala = sum(t.suprafata_ha for t in om.terenuri)
+        if suprafata_totala == 0:
+            continue
+            
+        total_general_ha += suprafata_totala
+        
+        row_cells = table.add_row().cells
+        row_cells[0].text = str(nr_crt)
+        row_cells[1].text = om.nume_complet
+        row_cells[2].text = om.cnp if om.cnp and not om.cnp.startswith("LIPSA") else ".............."
+        
+        row_cells[3].text = om.nr_data_contract if om.nr_data_contract else "......./.........."
+        row_cells[4].text = om.durata_contract if om.durata_contract else "7" 
+        
+        row_cells[5].text = f"{suprafata_totala:.4f}"
+        row_cells[6].text = f"{suprafata_totala:.4f}"
+        row_cells[7].text = "-"
+        row_cells[8].text = "-"
+        row_cells[9].text = "-"
+        row_cells[10].text = "-"
+        row_cells[11].text = "-"
+        row_cells[12].text = om.nume_complet
+        
+        for cell in row_cells:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(9)
+        nr_crt += 1
+
+    row_total = table.add_row().cells
+    row_total[1].text = "TOTAL"
+    row_total[5].text = f"{total_general_ha:.4f}"
+    row_total[6].text = f"{total_general_ha:.4f}"
+    
+    for cell in row_total:
+        for paragraph in cell.paragraphs:
+            for run in paragraph.runs:
+                run.font.bold = True
+                run.font.size = Pt(9)
+    
+    doc.add_paragraph("\n")
+    p_semn = doc.add_paragraph()
+    p_semn.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    run_semn = p_semn.add_run("SECRETAR GENERAL,\nVÎNĂTORU DRAGOȘ-VICTOR")
+    run_semn.bold = True
+
+    nume_fisier = "acte_salvate/Tabel_Centralizator.docx"
+    doc.save(nume_fisier)
+
+    return FileResponse(
+        path=nume_fisier, 
+        filename=f"Tabel_Primarie_{datetime.now().year}.docx",
+        media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
 
 
 # --- CITIRE LISTĂ DOCUMENTE ---

@@ -48,12 +48,16 @@ class ArendasUpdate(BaseModel):
     nume_complet: Optional[str] = None
     cnp: Optional[str] = None
     adresa: Optional[str] = None
+    nr_data_contract: Optional[str] = None
+    durata_contract: Optional[str] = None
 
 class ArendasResponse(BaseModel):
     id: int
     nume_complet: str
     cnp: str
     adresa: str
+    nr_data_contract: Optional[str] = None
+    durata_contract: Optional[str] = None  
     terenuri: List[TerenResponse] = []
     plati: List[PlataResponse] = []
     preferinte: List[PreferintaAnualaResponse] = []

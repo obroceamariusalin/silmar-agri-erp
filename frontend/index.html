@@ -78,10 +78,14 @@
     </div>
 
     <div id="ecran-bilant" class="ecran">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Situația Plăților</h5>
-                <button class="btn btn-sm btn-success" onclick="descarcaExcel()">Descărcare Excel</button>
+                <div>
+                    <button class="btn btn-sm btn-info text-white fw-bold me-2 shadow-sm" onclick="descarcaTabelPrimarie()">
+                        <i class="bi bi-file-word"></i> Descarcă Tabel Primărie
+                    </button>
+                    <button class="btn btn-sm btn-success shadow-sm" onclick="descarcaExcel()">Descărcare Excel</button>
+                </div>
             </div>
             <div class="card-body">
                 <table class="table table-hover">
@@ -253,9 +257,27 @@
                     <div class="row">
                         <div class="col-md-4 border-end">
                             <h6><i class="bi bi-person-badge"></i> Date Personale</h6>
-                            <p><strong>CNP:</strong> <span id="dosar-cnp"></span></p>
-                            <p><strong>Adresă:</strong> <span id="dosar-adresa"></span></p>
-                            <button class="btn btn-sm btn-warning w-100 mb-2" onclick="promptEditareOm()">Editează Date Personale</button>
+                            
+                            <div class="mb-2 d-flex justify-content-between align-items-center bg-white p-2 border rounded shadow-sm">
+                                <span><strong>CNP:</strong> <span id="dosar-cnp" class="small"></span></span>
+                                <button class="btn btn-sm btn-link text-warning p-0 lh-1" onclick="editeazaCampOm('cnp', 'CNP')" title="Editează CNP"><i class="bi bi-pencil-square fs-5"></i></button>
+                            </div>
+                            
+                            <div class="mb-2 d-flex justify-content-between align-items-center bg-white p-2 border rounded shadow-sm">
+                                <span><strong>Adresă:</strong> <span id="dosar-adresa" class="small"></span></span>
+                                <button class="btn btn-sm btn-link text-warning p-0 lh-1" onclick="editeazaCampOm('adresa', 'Adresă Domiciliu')" title="Editează Adresă"><i class="bi bi-pencil-square fs-5"></i></button>
+                            </div>
+                            
+                            <div class="mb-2 d-flex justify-content-between align-items-center bg-white p-2 border rounded shadow-sm">
+                                <span><strong>Nr/Dată Contract:</strong> <span id="dosar-nr-data" class="small fw-bold text-primary"></span></span>
+                                <button class="btn btn-sm btn-link text-warning p-0 lh-1" onclick="editeazaCampOm('nr_data_contract', 'Nr/Data Contract (Ex: 122/23.11.2017)')" title="Editează Număr/Dată"><i class="bi bi-pencil-square fs-5"></i></button>
+                            </div>
+                            
+                            <div class="mb-4 d-flex justify-content-between align-items-center bg-white p-2 border rounded shadow-sm">
+                                <span><strong>Durată:</strong> <span id="dosar-durata" class="fw-bold text-success"></span> ani</span>
+                                <button class="btn btn-sm btn-link text-warning p-0 lh-1" onclick="editeazaCampOm('durata_contract', 'Durată Contract (ani)')" title="Editează Durată"><i class="bi bi-pencil-square fs-5"></i></button>
+                            </div>
+                            
                             <button class="btn btn-sm btn-outline-danger w-100 mb-4" onclick="stergeOmCurent()">Șterge Dosar Definitiv</button>
                             
                             <h6><i class="bi bi-file-earmark-pdf"></i> Documente</h6>
@@ -495,6 +517,8 @@ function populeazaTabele() {
         document.getElementById('dosar-nume').innerText = om.nume_complet;
         document.getElementById('dosar-cnp').innerText = om.cnp;
         document.getElementById('dosar-adresa').innerText = om.adresa;
+        document.getElementById('dosar-nr-data').innerText = om.nr_data_contract || "Nespecificat";
+        document.getElementById('dosar-durata').innerText = om.durata_contract || "7";
 
         const tTerenuri = document.getElementById('dosar-tabel-terenuri');
         tTerenuri.innerHTML = '';
@@ -643,25 +667,42 @@ function populeazaTabele() {
         }
     }
 
-    async function promptEditareOm() {
+    function descarcaTabelPrimarie() {
+        window.location.href = `/descarca-tabel-primarie`;
+    }
+
+    async function editeazaCampOm(camp, numeCampFrumos) {
         if (!idCurent) return;
         const om = arendasiGlobal.find(x => x.id === idCurent);
-
-        const adresaNoua = prompt("Introdu noua adresă:", om.adresa);
         
-        if (adresaNoua && adresaNoua !== om.adresa) {
+        let valoareInitiala = om[camp] || "";
+        if (camp === 'cnp' && valoareInitiala.startsWith("LIPSA")) valoareInitiala = "";
+        if (camp === 'durata_contract' && !valoareInitiala) valoareInitiala = "7";
+
+        const valoareNoua = prompt(`Introdu ${numeCampFrumos}:`, valoareInitiala);
+        if (valoareNoua === null) return; 
+
+        let payload = {};
+        payload[camp] = valoareNoua.trim();
+
+        try {
             const response = await fetch(`/arendasi/${idCurent}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ "adresa": adresaNoua })
+                body: JSON.stringify(payload)
             });
+
             if (response.ok) {
-                alert("Adresă actualizată cu succes!");
-                incarcaDate(); 
-                setTimeout(() => deschideDosar(idCurent), 300); 
+                await incarcaDate(); 
+                deschideDosar(idCurent); 
+            } else {
+                alert("Eroare la salvare! Sigur ai actualizat schemas.py?");
             }
+        } catch (e) {
+            alert("Eroare de rețea.");
         }
     }
+    
 
     async function editTeren(idTeren) {
         const suprafataNoua = prompt("Introdu noua suprafață (în hectare):");

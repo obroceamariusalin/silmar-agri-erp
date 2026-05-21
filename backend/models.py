@@ -10,10 +10,13 @@ class Arendas(Base):
     nume_complet = Column(String, index=True)
     cnp = Column(String, unique=True, index=True)
     adresa = Column(String)
+    nr_data_contract = Column(String, nullable=True)
+    durata_contract = Column(String, default="7", nullable=True)
 
-    preferinte = relationship("PreferintaAnuala", back_populates="arendas", cascade="all, delete-orphan")
+
     terenuri = relationship("Teren", back_populates="proprietar", cascade="all, delete-orphan")
-    plati = relationship("Plata", back_populates="beneficiar", cascade="all, delete-orphan")
+    plati = relationship("Plata", back_populates="arendas", cascade="all, delete-orphan")
+    preferinte = relationship("PreferintaAnuala", back_populates="arendas", cascade="all, delete-orphan")
 
 
 class Teren(Base):
@@ -39,7 +42,7 @@ class Plata(Base):
     observatii = Column(String, nullable=True)
 
     arendas_id = Column(Integer, ForeignKey("arendasi.id"))
-    beneficiar = relationship("Arendas", back_populates="plati")
+    arendas = relationship("Arendas", back_populates="plati")
 
 class PreferintaAnuala(Base):
     __tablename__ = "preferinte_anuale"
