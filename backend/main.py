@@ -373,19 +373,19 @@ def descarca_tabel_primarie(db: Session = Depends(get_db)):
     run_antet = p_antet.add_run("JUDETUL DOLJ\nCOMUNA ARGETOAIA\nPRIMARIA COMUNEI ARGETOAIA\n")
     run_antet.bold = True
     doc.add_paragraph(f"NR. .................... din {datetime.now().strftime('%d.%m.%Y')}")
-   
+    
     p_titlu = doc.add_paragraph()
     p_titlu.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_titlu = p_titlu.add_run("TABEL CENTRALIZATOR AL CONTRACTELOR DE ARENDA\nSILMAR SOLUTION SRL, CUI 49659242 = arendaș")
     run_titlu.bold = True
     
-    table = doc.add_table(rows=1, cols=13)
+    table = doc.add_table(rows=1, cols=14)
     table.style = 'Table Grid'
     
     capete_tabel = [
-        "NR. CRT.", "NUME SI PRENUME ARENDATOR", "CNP", "NR./DATA CONTRACT DE ARENDA", 
-        "DURATA DE ARENDARE (ANI)", "SUPRAFATA TOTALA (Ha)", "Arabil (ha)", "Pasuni", 
-        "Fanete", "Vii", "Alte cat.", "Pruni", "TITULAR REGISTRUL AGRICOL"
+        "NR. CRT.", "NUME SI PRENUME ARENDATOR", "TERENURI (Tarla/Parcelă)", "CNP/CUI", 
+        "NR./DATA CONTRACT", "DURATA (ANI)", "SUPRAFATA TOTALA (Ha)", "Arabil (ha)", 
+        "Pasuni", "Fanete", "Vii", "Alte cat.", "Pruni", "TITULAR REGISTRUL AGRICOL"
     ]
     
     hdr_cells = table.rows[0].cells
@@ -409,31 +409,41 @@ def descarca_tabel_primarie(db: Session = Depends(get_db)):
         
         row_cells = table.add_row().cells
         row_cells[0].text = str(nr_crt)
-        row_cells[1].text = om.nume_complet
-        row_cells[2].text = om.cnp if om.cnp and not om.cnp.startswith("LIPSA") else ".............."
         
-        row_cells[3].text = om.nr_data_contract if om.nr_data_contract else "......./.........."
-        row_cells[4].text = om.durata_contract if om.durata_contract else "7" 
+        p_nume = row_cells[1].paragraphs[0]
+        run_nume = p_nume.add_run(om.nume_complet)
+        run_nume.font.bold = True
         
-        row_cells[5].text = f"{suprafata_totala:.4f}"
+        linii_teren = []
+        for t in om.terenuri:
+            linii_teren.append(f"T. {t.tarlaua}, P. {t.parcela} ({t.suprafata_ha:.2f} ha)")
+        
+        row_cells[2].text = "\n".join(linii_teren)
+        
+        row_cells[3].text = om.cnp if om.cnp and not om.cnp.startswith("LIPSA") else ".............."
+        row_cells[4].text = om.nr_data_contract if om.nr_data_contract else "......./.........."
+        row_cells[5].text = om.durata_contract if om.durata_contract else "7" 
+        
         row_cells[6].text = f"{suprafata_totala:.4f}"
-        row_cells[7].text = "-"
+        row_cells[7].text = f"{suprafata_totala:.4f}"
         row_cells[8].text = "-"
         row_cells[9].text = "-"
         row_cells[10].text = "-"
         row_cells[11].text = "-"
-        row_cells[12].text = om.nume_complet
+        row_cells[12].text = "-"
+        row_cells[13].text = om.nume_complet
         
         for cell in row_cells:
             for paragraph in cell.paragraphs:
                 for run in paragraph.runs:
-                    run.font.size = Pt(9)
+                    if not run.font.bold:
+                        run.font.size = Pt(9)
         nr_crt += 1
 
     row_total = table.add_row().cells
     row_total[1].text = "TOTAL"
-    row_total[5].text = f"{total_general_ha:.4f}"
     row_total[6].text = f"{total_general_ha:.4f}"
+    row_total[7].text = f"{total_general_ha:.4f}"
     
     for cell in row_total:
         for paragraph in cell.paragraphs:
@@ -455,7 +465,6 @@ def descarca_tabel_primarie(db: Session = Depends(get_db)):
         filename=f"Tabel_Primarie_{datetime.now().year}.docx",
         media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     )
-
 
 # --- CITIRE LISTĂ DOCUMENTE ---
 @app.get("/arendasi/{arendas_id}/documente")
