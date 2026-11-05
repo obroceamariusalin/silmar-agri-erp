@@ -57,11 +57,15 @@ class Plata(Base):
     __tablename__ = "plati"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Pentru plățile în bani: kg echivalent (scade din restul de kg) = suma_lei / pret_lei_kg
     cantitate_kg = Column(Numeric(12, 2, asdecimal=True))
     anul_agricol = Column(Integer, index=True)
     data_operatiune = Column(DateTime, default=_utcnow)
-    produs = Column(String, default="grau")
+    produs = Column(String, default="grau")  # grau | porumb | bani
     observatii = Column(String, nullable=True)
+    tip_plata = Column(String, default="natura", nullable=True)  # natura | bani
+    suma_lei = Column(Numeric(12, 2, asdecimal=True), nullable=True)
+    pret_lei_kg = Column(Numeric(10, 4, asdecimal=True), nullable=True)
 
     arendas_id = Column(Integer, ForeignKey("arendasi.id", ondelete="CASCADE"), index=True)
     arendas = relationship("Arendas", back_populates="plati")

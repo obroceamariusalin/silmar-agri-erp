@@ -5,6 +5,7 @@ amestecarea documentelor între doi utilizatori simultani) și tolerează date i
 """
 import io
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 
 import openpyxl
 from docx import Document
@@ -134,34 +135,46 @@ def borderou_excel(arendasi, an: int) -> bytes:
     subtire = Side(style="thin", color="B7C4BB")
     chenar = Border(left=subtire, right=subtire, top=subtire, bottom=subtire)
 
-    def setup_sheet(ws, titlu):
+    ws_bani = wb.create_sheet(f"Bani {an}")
+    headers_bani = [
+        "NR. CRT.", "NUME SI PRENUME", "LOCALITATE", "SUPRAFATA HA",
+        "CANTIT. BRUTA KG", "PRET LEI/KG", "SUMA BRUTA LEI", "SUMA DUPA DED. 40%", "IMPOZIT 10%",
+        "SUMA NETA", "VALOARE TVA", "SUMA PRIMITA", "ACHITAT LEI", "SEMNATURA",
+    ]
+
+    def setup_sheet(ws, titlu, capete, latimi):
         ws.append([FIRMA_NUME])
         ws.append([f"C.F. {FIRMA_CUI}"])
         ws.append([f"BORDEROU PRIVIND PLATA ARENDEI ({titlu}) PENTRU ANUL AGRICOL {an}"])
         ws.append([])
-        ws.append(headers)
+        ws.append(capete)
         for r in range(1, 4):
             ws.cell(row=r, column=1).font = bold
-        for c in range(1, len(headers) + 1):
+        for c in range(1, len(capete) + 1):
             cell = ws.cell(row=5, column=c)
             cell.font = bold
             cell.fill = antet_fill
             cell.border = chenar
             cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
-        latimi = [8, 32, 22, 13, 14, 14, 12, 13, 12, 15, 18]
         for i, w in enumerate(latimi, start=1):
             ws.column_dimensions[get_column_letter(i)].width = w
         ws.freeze_panes = "A6"
 
-    setup_sheet(ws_grau, "GRÂU")
-    setup_sheet(ws_porumb, "PORUMB")
+    latimi_cereale = [8, 32, 22, 13, 14, 14, 12, 13, 12, 15, 18]
+    setup_sheet(ws_grau, "GRÂU", headers, latimi_cereale)
+    setup_sheet(ws_porumb, "PORUMB", headers, latimi_cereale)
+    setup_sheet(ws_bani, "ÎN BANI", headers_bani, [8, 32, 22, 13, 14, 12, 14, 14, 12, 14, 12, 14, 14, 18])
 
-    nr = {"grau": 1, "porumb": 1}
+    nr = {"grau": 1, "porumb": 1, "bani": 1}
     for om in arendasi:
         suprafata_totala = float(calcule.suprafata_totala(om.terenuri))
         if suprafata_totala == 0:
             continue
         tip_cereala = calcule.cereala_pentru_an(om.preferinte, an)
+        if tip_cereala == "bani":
+            _rand_bani(ws_bani, nr["bani"], om, an, suprafata_totala, chenar)
+            nr["bani"] += 1
+            continue
         cheie = "grau" if tip_cereala == "grau" else "porumb"
 
         # --- formule păstrate exact ---
@@ -183,6 +196,40 @@ def borderou_excel(arendasi, an: int) -> bytes:
         nr[cheie] += 1
 
     return _bytes(wb)
+
+
+def _lei2(x: Decimal) -> Decimal:
+    return x.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _rand_bani(ws, nr_crt, om, an, suprafata_totala, chenar) -> None:
+    """Aceeași structură de calcul ca la cereale (deducere 40%, impozit 10%, TVA 11%), aplicată pe lei.
+    Prețul/kg = media ponderată a plăților în bani din anul respectiv (preț introdus la fiecare plată)."""
+    cant_bruta = round(suprafata_totala * float(KG_PER_HA))
+    plati_bani = [p for p in om.plati if p.anul_agricol == an and (p.tip_plata or "natura") == "bani"]
+    kg_bani = sum((calcule.to_decimal(p.cantitate_kg) for p in plati_bani), calcule.ZERO)
+    lei_achitat = _lei2(sum((calcule.to_decimal(p.suma_lei) for p in plati_bani), calcule.ZERO))
+    pret = (lei_achitat / kg_bani).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP) if kg_bani > 0 else None
+
+    rand = [nr_crt, _txt(om.nume_complet, "-"), calcule.extrage_localitate(om.adresa),
+            round(suprafata_totala, 3), cant_bruta]
+    if pret is None:
+        # fără plată în bani încă: prețul nu e cunoscut, sumele rămân de completat
+        rand += ["", "", "", "", "", "", "", float(lei_achitat), ""]
+    else:
+        suma_bruta = _lei2(Decimal(cant_bruta) * pret)
+        suma_dupa_ded = _lei2(suma_bruta * 60 / 100)
+        impozit = _lei2(suma_dupa_ded * 10 / 100)
+        suma_neta = suma_bruta - impozit
+        valoare_tva = _lei2(suma_neta * 11 / 100)
+        suma_primita = suma_neta + valoare_tva
+        rand += [float(pret), float(suma_bruta), float(suma_dupa_ded), float(impozit), float(suma_neta),
+                 float(valoare_tva), float(suma_primita), float(lei_achitat), ""]
+    ws.append(rand)
+    for i, cell in enumerate(ws[ws.max_row], start=1):
+        cell.border = chenar
+        if 6 <= i <= 13:
+            cell.number_format = "#,##0.0000" if i == 6 else "#,##0.00"
 
 
 # ------------------------------------------------------------------ Contract rapid

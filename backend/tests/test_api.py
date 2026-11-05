@@ -115,6 +115,37 @@ def test_teren_plata_preferinta_returneaza_dosarul(client):
     assert client.get(f"/api/arendasi/{om['id']}").status_code == 404
 
 
+def test_plata_in_bani_si_borderou(client):
+    om = client.post("/api/arendasi", json={"nume_complet": "Plata In Bani", "terenuri": [
+        {"tarlaua": "1", "parcela": "1", "suprafata_ha": "1"}]}).json()   # 600 kg datorat
+    client.post(f"/api/arendasi/{om['id']}/preferinte", json={"anul_agricol": 2030, "tip_cereala": "bani"})
+
+    # lipsește prețul -> eroare clară
+    r = client.post(f"/api/arendasi/{om['id']}/plati", json={"tip_plata": "bani", "suma_lei": 100, "anul_agricol": 2030})
+    assert r.status_code == 422 and "prețul" in r.json()["detail"]
+
+    # sumă + preț -> kg echivalent calculat (220 lei / 1,10 = 200 kg)
+    d = client.post(f"/api/arendasi/{om['id']}/plati", json={"tip_plata": "bani", "suma_lei": "220", "pret_lei_kg": "1,10", "anul_agricol": 2030}).json()
+    p = d["plati"][-1]
+    assert p["tip_plata"] == "bani" and p["produs"] == "bani" and p["cantitate_kg"] == 200 and p["suma_lei"] == 220
+
+    # plata completă în bloc pentru cei pe bani cere preț
+    r = client.post("/api/arendasi/plata-totala-multipla", json={"ids": [om["id"]], "an": 2030})
+    assert r.status_code == 400 and "prețul" in r.json()["detail"]
+    r = client.post("/api/arendasi/plata-totala-multipla", json={"ids": [om["id"]], "an": 2030, "pret_lei_kg": "1.10"})
+    assert r.json()["procesati"] == 1
+    b = client.get(f"/api/arendasi/{om['id']}/bilant?an=2030").json()
+    assert b["rest_de_plata_kg"] == 0
+
+    wb = openpyxl.load_workbook(io.BytesIO(client.get("/api/rapoarte/borderou?an=2030").content))
+    ws = wb["Bani 2030"]
+    rand = next(r for r in ws.iter_rows(min_row=6, values_only=True) if r[1] == "Plata In Bani")
+    # 600 kg × 1,10 = 660 lei brut; ded. 40% -> 396; impozit 39,60; net 620,40; TVA 68,24; primit 688,64
+    assert rand[4] == 600 and rand[5] == 1.1 and rand[6] == 660
+    assert rand[8] == 39.6 and rand[9] == 620.4 and rand[11] == 688.64 and rand[12] == 660
+    client.delete(f"/api/arendasi/{om['id']}")
+
+
 def test_plata_arendas_inexistent(client):
     r = client.post("/api/arendasi/999999/plati", json={"cantitate_kg": 1, "anul_agricol": 2026})
     assert r.status_code == 404
@@ -151,7 +182,7 @@ def test_borderou_si_csv(client, date_incomplete):
     r = client.get("/api/rapoarte/borderou?an=2026")
     assert r.status_code == 200
     wb = openpyxl.load_workbook(io.BytesIO(r.content))
-    assert wb.sheetnames == ["Grâu 2026", "Porumb 2026"]
+    assert wb.sheetnames == ["Grâu 2026", "Porumb 2026", "Bani 2026"]
     r = client.get("/api/rapoarte/arendasi.csv?an=2026")
     assert r.status_code == 200 and r.content.startswith(b"\xef\xbb\xbf")
 

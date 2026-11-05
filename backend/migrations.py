@@ -29,6 +29,15 @@ def ruleaza_migrari() -> None:
         if "durata_contract" not in col_arendasi:
             conn.execute(text("ALTER TABLE arendasi ADD COLUMN durata_contract VARCHAR DEFAULT '7'"))
 
+        # Plăți în bani
+        col_plati = _coloane(insp, "plati")
+        if "tip_plata" not in col_plati:
+            conn.execute(text("ALTER TABLE plati ADD COLUMN tip_plata VARCHAR DEFAULT 'natura'"))
+        if "suma_lei" not in col_plati:
+            conn.execute(text("ALTER TABLE plati ADD COLUMN suma_lei NUMERIC(12,2)"))
+        if "pret_lei_kg" not in col_plati:
+            conn.execute(text("ALTER TABLE plati ADD COLUMN pret_lei_kg NUMERIC(10,4)"))
+
         # CNP-urile false "LIPSA-xxxx" devin NULL
         conn.execute(text("UPDATE arendasi SET cnp = NULL WHERE cnp LIKE 'LIPSA%' OR TRIM(cnp) = ''"))
 

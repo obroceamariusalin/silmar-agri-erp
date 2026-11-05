@@ -90,7 +90,9 @@ def adauga_teren(arendas_id: int, teren: schemas.TerenCreate, db: Session = Depe
 def inregistreaza_plata(arendas_id: int, plata: schemas.PlataCreate, db: Session = Depends(get_db)):
     om = arendas_sau_404(db, arendas_id)
     date = plata.model_dump()
-    date["produs"] = date["produs"] or calcule.cereala_pentru_an(om.preferinte, plata.anul_agricol)
+    if not date["produs"]:
+        pref = calcule.cereala_pentru_an(om.preferinte, plata.anul_agricol)
+        date["produs"] = pref if pref in ("grau", "porumb") else "grau"
     db.add(models.Plata(**date, arendas_id=arendas_id))
     db.commit()
     return reincarca(db, arendas_id)
@@ -116,18 +118,35 @@ def bilant(arendas_id: int, an: int, db: Session = Depends(get_db)):
 @router.post("/plata-totala-multipla")
 def plata_totala_multipla(date: schemas.PlataMultiplaRequest, db: Session = Depends(get_db)):
     oameni = query_arendasi(db).filter(models.Arendas.id.in_(set(date.ids))).all()
+    resturi = {
+        om.id: calcule.kg_datorat(calcule.suprafata_totala(om.terenuri)) - calcule.kg_platit(om.plati, date.an)
+        for om in oameni
+    }
+    in_bani = [om for om in oameni
+               if resturi[om.id] > 0 and calcule.cereala_pentru_an(om.preferinte, date.an) == "bani"]
+    if in_bani and date.pret_lei_kg is None:
+        nume = ", ".join(om.nume_complet for om in in_bani[:5]) + ("…" if len(in_bani) > 5 else "")
+        raise HTTPException(status_code=400, detail=f"Introdu prețul pe kg: {len(in_bani)} arendași sunt plătiți în bani ({nume}).")
+
     procesati = 0
     for om in oameni:
-        rest = calcule.kg_datorat(calcule.suprafata_totala(om.terenuri)) - calcule.kg_platit(om.plati, date.an)
-        if rest > 0:
-            db.add(models.Plata(
-                arendas_id=om.id,
-                anul_agricol=date.an,
-                cantitate_kg=rest,
-                produs=calcule.cereala_pentru_an(om.preferinte, date.an),
-                observatii="Plată totală automată (în bloc)",
-            ))
-            procesati += 1
+        rest = resturi[om.id]
+        if rest <= 0:
+            continue
+        cereala = calcule.cereala_pentru_an(om.preferinte, date.an)
+        plata = models.Plata(
+            arendas_id=om.id,
+            anul_agricol=date.an,
+            cantitate_kg=rest,
+            produs=cereala,
+            observatii="Plată totală automată (în bloc)",
+        )
+        if cereala == "bani":
+            plata.tip_plata = "bani"
+            plata.pret_lei_kg = date.pret_lei_kg
+            plata.suma_lei = calcule.rotunjeste_kg(rest * date.pret_lei_kg)
+        db.add(plata)
+        procesati += 1
     db.commit()
     return {
         "mesaj": f"Plată completă înregistrată pentru {procesati} arendași"
@@ -169,5 +188,5 @@ def preferinte_multiple(date: schemas.PreferinteMultipleRequest, db: Session = D
     for arendas_id in valide:
         _seteaza_preferinta(db, arendas_id, date.anul_agricol, date.tip_cereala, existente)
     db.commit()
-    eticheta = "grâu" if date.tip_cereala == "grau" else "porumb"
+    eticheta = {"grau": "grâu", "porumb": "porumb", "bani": "plata în bani"}[date.tip_cereala]
     return {"mesaj": f"Am setat {eticheta} pentru {date.anul_agricol} la {len(valide)} arendași.", "actualizati": len(valide)}

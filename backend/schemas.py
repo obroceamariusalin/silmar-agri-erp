@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from services import calcule
 from validators import (
@@ -14,7 +14,9 @@ from validators import (
     valideaza_tarla_parcela,
 )
 
-Cereala = Literal["grau", "porumb"]
+Cereala = Literal["grau", "porumb", "bani"]  # preferința anuală: ce primește arendașul
+Produs = Literal["grau", "porumb", "bani"]
+TipPlata = Literal["natura", "bani"]
 
 
 def _text_optional(v, max_len: int, camp: str):
@@ -136,16 +138,66 @@ class PreferinteMultipleRequest(BaseModel):
 
 
 # ---------------------------------------------------------------- Plăți
+def _pret(v):
+    if v is None or str(v).strip() == "":
+        return None
+    return parse_decimal(v, 4, "Prețul pe kg", maxim=Decimal("1000"))
+
+
+def _lei(v):
+    if v is None or str(v).strip() == "":
+        return None
+    return parse_decimal(v, 2, "Suma", maxim=Decimal("100000000"))
+
+
 class PlataCreate(BaseModel):
-    cantitate_kg: Decimal
+    """În natură: cantitate_kg obligatorie.
+    În bani: pret_lei_kg obligatoriu + suma_lei SAU cantitate_kg; celălalt se calculează."""
+    tip_plata: TipPlata = "natura"
+    cantitate_kg: Optional[Decimal] = None
+    suma_lei: Optional[Decimal] = None
+    pret_lei_kg: Optional[Decimal] = None
     anul_agricol: int
-    produs: Optional[Cereala] = None
+    produs: Optional[Produs] = None
     observatii: Optional[str] = None
 
     @field_validator("cantitate_kg", mode="before")
     @classmethod
     def _kg(cls, v):
+        if v is None or str(v).strip() == "":
+            return None
         return parse_decimal(v, 2, "Cantitatea", maxim=Decimal("10000000"))
+
+    @field_validator("suma_lei", mode="before")
+    @classmethod
+    def _suma(cls, v):
+        return _lei(v)
+
+    @field_validator("pret_lei_kg", mode="before")
+    @classmethod
+    def _pret(cls, v):
+        return _pret(v)
+
+    @model_validator(mode="after")
+    def _completeaza(self):
+        if self.tip_plata == "natura":
+            if self.cantitate_kg is None:
+                raise ValueError("Introdu cantitatea în kg.")
+            self.suma_lei = self.pret_lei_kg = None
+            if self.produs == "bani":
+                self.produs = None
+            return self
+        # plată în bani
+        if self.pret_lei_kg is None:
+            raise ValueError("Pentru plata în bani introdu prețul pe kg.")
+        if self.suma_lei is None and self.cantitate_kg is None:
+            raise ValueError("Introdu suma în lei sau cantitatea echivalentă în kg.")
+        if self.suma_lei is None:
+            self.suma_lei = calcule.rotunjeste_kg(self.cantitate_kg * self.pret_lei_kg)
+        elif self.cantitate_kg is None:
+            self.cantitate_kg = calcule.rotunjeste_kg(self.suma_lei / self.pret_lei_kg)
+        self.produs = "bani"
+        return self
 
     @field_validator("anul_agricol")
     @classmethod
@@ -166,16 +218,36 @@ class PlataResponse(BaseModel):
     data_operatiune: Optional[datetime] = None
     produs: Optional[str] = None
     observatii: Optional[str] = None
+    tip_plata: str = "natura"
+    suma_lei: Optional[float] = None
+    pret_lei_kg: Optional[float] = None
 
     @field_validator("cantitate_kg", mode="before")
     @classmethod
     def _f(cls, v):
         return float(calcule.rotunjeste_kg(v))
 
+    @field_validator("tip_plata", mode="before")
+    @classmethod
+    def _tip(cls, v):
+        return v or "natura"
+
+    @field_validator("suma_lei", "pret_lei_kg", mode="before")
+    @classmethod
+    def _bani(cls, v):
+        return None if v is None else float(v)
+
 
 class PlataMultiplaRequest(BaseModel):
     ids: List[int] = Field(min_length=1, max_length=5000)
     an: int
+    # necesar doar dacă printre cei selectați sunt arendași setați „bani”
+    pret_lei_kg: Optional[Decimal] = None
+
+    @field_validator("pret_lei_kg", mode="before")
+    @classmethod
+    def _pret(cls, v):
+        return _pret(v)
 
     _an = field_validator("an")(PlataCreate._an.__func__)
 
