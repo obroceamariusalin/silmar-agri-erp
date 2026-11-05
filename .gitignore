@@ -1,5 +1,13 @@
+# Python
+__pycache__/
+*.pyc
 backend/venv/
-backend/__pycache__/
+venv/
+.venv/
+.pytest_cache/
+
+# Date locale / secrete
 *.db
-backend/acte_salvate/
 .env
+backend/.env
+backend/acte_salvate/
