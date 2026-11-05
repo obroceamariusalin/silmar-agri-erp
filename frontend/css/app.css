@@ -31,6 +31,7 @@
   --info: #1d5fbf;    --info-bg: #e7effb;
   --grau: #8a5a00;    --grau-bg: #fbf0d9;
   --porumb: #6b5b00;  --porumb-bg: #fbf6c9;
+  --bani: #1d5fbf;    --bani-bg: #e7effb;
 
   --radius-sm: 8px;
   --radius: 12px;
@@ -248,6 +249,7 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand-60
 .meter > span { display: block; height: 100%; border-radius: 999px; background: var(--brand-500); transition: width .5s var(--ease); }
 .meter.grau { background: #f6e6c1; } .meter.grau > span { background: #b7791f; }
 .meter.porumb { background: #f3ebaa; } .meter.porumb > span { background: #9a8400; }
+.meter.bani { background: #d6e4f8; } .meter.bani > span { background: #2f6fca; }
 .meter-row { display: grid; gap: 8px; padding: 14px 0; border-bottom: 1px dashed var(--border); }
 .meter-row:last-child { border-bottom: 0; padding-bottom: 0; }
 .meter-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
@@ -283,6 +285,7 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand-60
 .badge-info { background: var(--info-bg); color: var(--info); }
 .badge-grau { background: var(--grau-bg); color: var(--grau); }
 .badge-porumb { background: var(--porumb-bg); color: var(--porumb); }
+.badge-bani { background: var(--bani-bg); color: var(--bani); }
 .badge-brand { background: var(--brand-100); color: var(--brand-700); }
 
 /* ------------------------------------------------------------- Filtre */

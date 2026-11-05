@@ -68,6 +68,17 @@ export const datorat = (om) => roundKg(haOm(om) * store.config.kg_per_ha);
 export const platit = (om, an = store.an) =>
   roundKg(om.plati.filter((p) => p.anul_agricol === an).reduce((s, p) => s + p.cantitate_kg, 0));
 export const rest = (om, an = store.an) => roundKg(datorat(om) - platit(om, an));
+/** Lei plătiți efectiv (doar plățile în bani) în anul dat. */
+export const leiPlatit = (om, an = store.an) =>
+  roundKg(om.plati.filter((p) => p.anul_agricol === an && p.tip_plata === "bani").reduce((s, p) => s + (p.suma_lei || 0), 0));
+
+/** Ultimul preț lei/kg folosit (memorat local, ca să nu-l scrii de fiecare dată). */
+export function ultimulPret() {
+  try { return localStorage.getItem("ultimulPretLeiKg") || ""; } catch { return ""; }
+}
+export function memoreazaPret(p) {
+  try { localStorage.setItem("ultimulPretLeiKg", String(p)); } catch { /* ignore */ }
+}
 
 /** 'achitat' | 'partial' | 'neachitat' | 'fara_teren' */
 export function statusPlata(om, an = store.an) {

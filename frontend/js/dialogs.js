@@ -1,13 +1,14 @@
 // Modale de lucru: dosar arendaș, adăugare arendaș (cu import PDF), contract rapid, editare teren.
 import { api, descarca } from "./api.js";
 import {
-  eroareIdentificator, eroareSuprafata, fmtData, fmtHa, fmtKg, fmtNumHa, initiale, sumHa,
+  eroareIdentificator, eroareSuprafata, fmtData, fmtHa, fmtKg, fmtLei, fmtNumHa, fmtPret, initiale, parseNr, sumHa,
 } from "./format.js";
 import {
-  cereala, datorat, getArendas, haOm, onChange, platit, rest, stergeArendasLocal, store, upsertArendas, aniDisponibili,
+  cereala, datorat, getArendas, onChange, platit, rest, stergeArendasLocal, store, upsertArendas, aniDisponibili,
+  leiPlatit, memoreazaPret, ultimulPret,
 } from "./store.js";
 import {
-  $$, aratoEroriServer, badgeCereala, badgeStatusContract, confirma, cuIncarcare, curataErori, eroare, eroareCamp,
+  $$, ETICHETA_CEREALA, aratoEroriServer, badgeCereala, badgeStatusContract, confirma, cuIncarcare, curataErori, eroare, eroareCamp,
   field, html, icon, ok, openModal, render, valori,
 } from "./ui.js";
 
@@ -387,27 +388,45 @@ export function deschideDosar(id, tabInitial = "date") {
     });
   }
 
-  // ---------------- Plăți
+  // ---------------- Plăți (în natură sau în bani)
   function panelPlati(panel, om) {
     const r = rest(om);
     const plati = [...om.plati].sort((a, b) => (b.anul_agricol - a.anul_agricol) || (b.data_operatiune || "").localeCompare(a.data_operatiune || ""));
     const cer = cereala(om);
+    let tip = cer === "bani" ? "bani" : "natura";
+    const lei = leiPlatit(om);
     render(panel, html`
       <div class="grid grid-2">
         <div class="card" style="box-shadow:none"><div class="card-body stack" style="gap:14px">
-          <div class="row"><div class="strong">Cereală pentru ${store.an}</div><span class="spacer"></span>
-            <div class="segmented" role="group" aria-label="Cereală">
-              <button type="button" class="${cer === "grau" ? "active" : ""}" data-cer="grau">🌾 Grâu</button>
-              <button type="button" class="${cer === "porumb" ? "active" : ""}" data-cer="porumb">🌽 Porumb</button>
+          <div class="row"><div class="strong">Ce primește în ${store.an}</div><span class="spacer"></span>
+            <div class="segmented" role="group" aria-label="Tip arendă">
+              ${["grau", "porumb", "bani"].map((c) => html`<button type="button" class="${cer === c ? "active" : ""}" data-cer="${c}">${ETICHETA_CEREALA[c]}</button>`)}
             </div>
           </div>
-          <div class="small muted">${fmtHa(om.suprafata_totala)} × ${store.config.kg_per_ha} kg/ha = <b>${fmtKg(datorat(om))}</b></div>
-          ${r > 0 ? html`<button class="btn btn-dark" data-full>${icon("check2-all")} Achită restul: ${fmtKg(r)}</button>`
+          <div class="small muted">${fmtHa(om.suprafata_totala)} × ${store.config.kg_per_ha} kg/ha = <b>${fmtKg(datorat(om))}</b>${cer === "bani" ? " (plătit în bani la prețul pe kg)" : ""}</div>
+          ${lei > 0 ? html`<div class="small">💵 Plătit în bani în ${store.an}: <b class="num">${fmtLei(lei)}</b></div>` : ""}
+          ${r > 0 ? html`<button class="btn btn-dark" data-full>${icon("check2-all")} Achită restul: ${fmtKg(r)}${cer === "bani" ? " în bani" : ""}</button>`
                   : html`<div class="badge badge-ok" style="align-self:flex-start">${icon("check-circle")} Achitat integral pentru ${store.an}</div>`}
         </div></div>
         <div class="card" style="box-shadow:none"><div class="card-body">
           <form class="form-grid" novalidate data-form>
-            ${field({ name: "cantitate_kg", label: "Cantitate (kg)", col: 6, inputmode: "decimal", placeholder: "0" })}
+            <div class="col-12 row">
+              <span class="label">Plată nouă</span><span class="spacer"></span>
+              <div class="segmented" role="group" aria-label="Mod de plată">
+                <button type="button" data-tip="natura">🌾 În natură</button>
+                <button type="button" data-tip="bani">💵 În bani</button>
+              </div>
+            </div>
+            <div class="field col-6" data-grup="bani"><label for="f-pret">Preț (lei/kg)</label>
+              <input class="input" id="f-pret" name="pret_lei_kg" inputmode="decimal" placeholder="ex: 1,10" value="${ultimulPret()}">
+              <div class="field-error" data-error-for="pret_lei_kg"></div></div>
+            <div class="field col-6" data-grup="bani"><label for="f-suma">Sumă (lei)</label>
+              <input class="input" id="f-suma" name="suma_lei" inputmode="decimal" placeholder="0,00">
+              <div class="field-error" data-error-for="suma_lei"></div></div>
+            <div class="field col-6"><label for="f-kg" data-kg-label>Cantitate (kg)</label>
+              <input class="input" id="f-kg" name="cantitate_kg" inputmode="decimal" placeholder="0">
+              <div class="hint" data-grup="bani">Se calculează automat din sumă și preț (sau invers)</div>
+              <div class="field-error" data-error-for="cantitate_kg"></div></div>
             <div class="field col-6"><label>An agricol</label><select class="select" name="anul_agricol">
               ${aniDisponibili().map((a) => html`<option value="${a}" ${a === store.an ? "selected" : ""}>${a}</option>`)}</select></div>
             ${field({ name: "observatii", label: "Observații", col: 12, placeholder: "Opțional (ex: livrat la domiciliu)" })}
@@ -417,11 +436,12 @@ export function deschideDosar(id, tabInitial = "date") {
       </div>
       <h4 style="margin:22px 0 10px;font-size:14px">Istoric plăți</h4>
       ${plati.length ? html`<div class="card" style="box-shadow:none"><table class="dt">
-        <thead><tr><th>Data</th><th>An agricol</th><th>Produs</th><th>Observații</th><th class="right">Cantitate</th><th></th></tr></thead>
+        <thead><tr><th>Data</th><th>An agricol</th><th>Tip</th><th>Observații</th><th class="right">Cantitate</th><th></th></tr></thead>
         <tbody>${plati.map((p) => html`<tr>
-          <td class="m-title" data-label="Data"><span class="cell-title">${fmtKg(p.cantitate_kg)}</span> <span class="cell-sub">· ${fmtData(p.data_operatiune)}</span></td>
+          <td class="m-title" data-label="Data"><span class="cell-title">${p.tip_plata === "bani" ? fmtLei(p.suma_lei) : fmtKg(p.cantitate_kg)}</span> <span class="cell-sub">· ${fmtData(p.data_operatiune)}</span></td>
           <td data-label="An agricol"><span class="badge badge-brand">${p.anul_agricol}</span></td>
-          <td data-label="Produs">${badgeCereala(p.produs)}</td>
+          <td data-label="Tip">${badgeCereala(p.tip_plata === "bani" ? "bani" : p.produs)}
+            ${p.tip_plata === "bani" ? html`<div class="cell-sub">${fmtLei(p.suma_lei)} · ${fmtPret(p.pret_lei_kg)}</div>` : ""}</td>
           <td data-label="Observații" class="small muted">${p.observatii || "—"}</td>
           <td class="right num strong m-hide" data-label="Cantitate" style="color:var(--ok)">+ ${fmtKg(p.cantitate_kg)}</td>
           <td class="right m-actions"><button class="btn btn-ghost btn-sm btn-icon btn-danger-soft" data-del="${p.id}" aria-label="Anulează plata">${icon("trash3")}</button></td>
@@ -429,33 +449,104 @@ export function deschideDosar(id, tabInitial = "date") {
 
     const form = panel.querySelector("[data-form]");
     form.addEventListener("submit", (e) => e.preventDefault());
+
+    // --- comutare natură / bani
+    const aplicaTip = () => {
+      form.querySelectorAll("[data-tip]").forEach((b) => b.classList.toggle("active", b.dataset.tip === tip));
+      form.querySelectorAll("[data-grup=bani]").forEach((el) => (el.hidden = tip !== "bani"));
+      form.querySelector("[data-kg-label]").textContent = tip === "bani" ? "Echivalent (kg)" : "Cantitate (kg)";
+      curataErori(form);
+    };
+    form.querySelectorAll("[data-tip]").forEach((b) => b.addEventListener("click", () => { tip = b.dataset.tip; aplicaTip(); }));
+    aplicaTip();
+
+    // --- calcul automat sumă <-> kg (ultimul câmp editat de utilizator câștigă)
+    let ultim = "suma_lei";
+    const recalc = () => {
+      if (tip !== "bani") return;
+      const pret = parseNr(form.pret_lei_kg.value);
+      if (!(pret > 0)) return;
+      if (ultim === "suma_lei") {
+        const s = parseNr(form.suma_lei.value);
+        form.cantitate_kg.value = s > 0 ? String(Math.round((s / pret) * 100) / 100).replace(".", ",") : "";
+      } else {
+        const kg = parseNr(form.cantitate_kg.value);
+        form.suma_lei.value = kg > 0 ? (Math.round(kg * pret * 100) / 100).toFixed(2).replace(".", ",") : "";
+      }
+    };
+    form.suma_lei.addEventListener("input", () => { ultim = "suma_lei"; recalc(); });
+    form.cantitate_kg.addEventListener("input", () => { if (tip === "bani") { ultim = "cantitate_kg"; recalc(); } });
+    form.pret_lei_kg.addEventListener("input", recalc);
+
     panel.querySelectorAll("[data-cer]").forEach((b) => b.addEventListener("click", async () => {
       try {
         upsertArendas(await api.post(`/api/arendasi/${om.id}/preferinte`, { anul_agricol: store.an, tip_cereala: b.dataset.cer }));
-        ok("Preferință salvată", `${b.dataset.cer === "grau" ? "Grâu" : "Porumb"} pentru ${store.an}`);
+        ok("Preferință salvată", `${ETICHETA_CEREALA[b.dataset.cer]} pentru ${store.an}`);
       } catch (err) { eroare(err); }
     }));
-    panel.querySelector("[data-full]")?.addEventListener("click", (e) => cuIncarcare(e.currentTarget, async () => {
-      try {
-        upsertArendas(await api.post(`/api/arendasi/${om.id}/plati`, { cantitate_kg: r.toFixed(2), anul_agricol: store.an, observatii: "Plată integrală" }));
-        ok("Plată înregistrată", `${fmtKg(r)} pentru ${store.an}`);
-      } catch (err) { eroare(err); }
-    }));
+
+    panel.querySelector("[data-full]")?.addEventListener("click", (e) => {
+      const btn = e.currentTarget;
+      if (cer !== "bani") {
+        return cuIncarcare(btn, async () => {
+          try {
+            upsertArendas(await api.post(`/api/arendasi/${om.id}/plati`, { cantitate_kg: r.toFixed(2), anul_agricol: store.an, observatii: "Plată integrală" }));
+            ok("Plată înregistrată", `${fmtKg(r)} pentru ${store.an}`);
+          } catch (err) { eroare(err); }
+        });
+      }
+      // în bani: cerem prețul, arătăm suma
+      (async () => {
+        const rez = await confirma({
+          title: "Achiți restul în bani?", confirmLabel: "Înregistrează plata",
+          message: `Rest de plată ${store.an}: ${fmtKg(r)}.`,
+          extra: html`<div class="field"><label for="f-pret-full">Preț (lei/kg)</label>
+            <input class="input" id="f-pret-full" name="pret" inputmode="decimal" placeholder="ex: 1,10" value="${ultimulPret()}" autofocus></div>`,
+        });
+        if (!rez) return;
+        const pret = parseNr(rez.pret);
+        if (!(pret > 0)) return eroare(new Error("Introdu un preț pe kg mai mare decât 0."), "Prețul lipsește");
+        memoreazaPret(rez.pret);
+        await cuIncarcare(btn, async () => {
+          try {
+            upsertArendas(await api.post(`/api/arendasi/${om.id}/plati`, {
+              tip_plata: "bani", cantitate_kg: r.toFixed(2), pret_lei_kg: String(pret), anul_agricol: store.an, observatii: "Plată integrală în bani",
+            }));
+            ok("Plată în bani înregistrată", `${fmtLei(Math.round(r * pret * 100) / 100)} pentru ${store.an}`);
+          } catch (err) { eroare(err); }
+        });
+      })();
+    });
+
     panel.querySelector("[data-add]").addEventListener("click", (e) => { e.preventDefault(); cuIncarcare(e.currentTarget, async () => {
       curataErori(form);
       const v = valori(form);
-      const kg = parseFloat(String(v.cantitate_kg).replace(",", "."));
-      if (!(kg > 0)) return eroareCamp(form, "cantitate_kg", "Introdu o cantitate mai mare decât 0.");
+      const kg = parseNr(v.cantitate_kg);
+      const body = { anul_agricol: +v.anul_agricol, observatii: v.observatii, tip_plata: tip };
+      if (tip === "natura") {
+        if (!(kg > 0)) return eroareCamp(form, "cantitate_kg", "Introdu o cantitate mai mare decât 0.");
+        body.cantitate_kg = String(kg);
+      } else {
+        const pret = parseNr(v.pret_lei_kg), suma = parseNr(v.suma_lei);
+        if (!(pret > 0)) return eroareCamp(form, "pret_lei_kg", "Introdu prețul pe kg.");
+        if (!(suma > 0) && !(kg > 0)) return eroareCamp(form, "suma_lei", "Introdu suma sau cantitatea echivalentă.");
+        body.pret_lei_kg = String(pret);
+        if (suma > 0) body.suma_lei = String(suma);
+        if (kg > 0) body.cantitate_kg = String(kg);
+        memoreazaPret(v.pret_lei_kg);
+      }
       try {
-        upsertArendas(await api.post(`/api/arendasi/${om.id}/plati`, { ...v, cantitate_kg: String(v.cantitate_kg).replace(",", "."), anul_agricol: +v.anul_agricol }));
-        ok("Plată înregistrată", `${fmtKg(kg)} pentru ${v.anul_agricol}`);
+        upsertArendas(await api.post(`/api/arendasi/${om.id}/plati`, body));
+        ok("Plată înregistrată", tip === "bani" ? `${fmtLei(parseNr(v.suma_lei) || kg * parseNr(v.pret_lei_kg))} pentru ${v.anul_agricol}` : `${fmtKg(kg)} pentru ${v.anul_agricol}`);
       } catch (err) { aratoEroriServer(form, err); }
     }); });
+
     panel.addEventListener("click", async (e) => {
       const del = e.target.closest("[data-del]");
       if (!del) return;
       const p = om.plati.find((x) => x.id === +del.dataset.del);
-      if (!(await confirma({ title: "Anulezi plata?", danger: true, confirmLabel: "Anulează plata", message: `${fmtKg(p.cantitate_kg)} din ${fmtData(p.data_operatiune)} (anul ${p.anul_agricol}). Restul de plată va crește la loc.` }))) return;
+      const descriere = p.tip_plata === "bani" ? `${fmtLei(p.suma_lei)} (${fmtKg(p.cantitate_kg)} echivalent)` : fmtKg(p.cantitate_kg);
+      if (!(await confirma({ title: "Anulezi plata?", danger: true, confirmLabel: "Anulează plata", message: `${descriere} din ${fmtData(p.data_operatiune)} (anul ${p.anul_agricol}). Restul de plată va crește la loc.` }))) return;
       try { upsertArendas(await api.del(`/api/plati/${p.id}`)); ok("Plată anulată"); } catch (err) { eroare(err); }
     });
   }

@@ -1,7 +1,9 @@
 import { api } from "../api.js";
 import { deschideDosar, descarcaRaport } from "../dialogs.js";
-import { collator, fmtHa, fmtInt, fmtKg, normalizeaza, roundKg, sumHa } from "../format.js";
-import { cereala, datorat, haOm, incarcaArendasi, platit, rest, statusPlata, store } from "../store.js";
+import { collator, fmtHa, fmtInt, fmtKg, fmtLei, normalizeaza, parseNr, roundKg, sumHa } from "../format.js";
+import {
+  cereala, datorat, haOm, incarcaArendasi, leiPlatit, memoreazaPret, platit, rest, statusPlata, store, ultimulPret,
+} from "../store.js";
 import { DataTable } from "../table.js";
 import { $, badgeCereala, confirma, cuIncarcare, debounce, eroare, html, icon, ok, render } from "../ui.js";
 
@@ -34,7 +36,7 @@ export function mount(el) {
       <div class="toolbar">
         <div class="input-icon">${icon("search")}<input class="input input-sm" type="search" placeholder="Caută nume, CNP, localitate…" data-f="q" value="${filtre.q}"></div>
         <select class="select select-sm" data-f="cereala" aria-label="Cereală">
-          <option value="">Toate cerealele</option><option value="grau">🌾 Grâu</option><option value="porumb">🌽 Porumb</option>
+          <option value="">Toate tipurile</option><option value="grau">🌾 Grâu</option><option value="porumb">🌽 Porumb</option><option value="bani">💵 Bani</option>
         </select>
         <select class="select select-sm" data-f="status" aria-label="Status plată">
           <option value="">Toate statusurile</option><option value="neachitat">Neachitat</option><option value="partial">Parțial</option><option value="achitat">Achitat</option>
@@ -48,6 +50,7 @@ export function mount(el) {
       <span class="count" data-count></span>
       <button class="btn btn-sm btn-ghost" data-bulk-act="grau">🌾 Setează grâu</button>
       <button class="btn btn-sm btn-ghost" data-bulk-act="porumb">🌽 Setează porumb</button>
+      <button class="btn btn-sm btn-ghost" data-bulk-act="bani">💵 Setează bani</button>
       <button class="btn btn-sm btn-primary" data-bulk-act="plata">${icon("check2-all")} Plată completă</button>
       <button class="btn btn-sm btn-ghost btn-icon" data-bulk-act="clear" aria-label="Deselectează">${icon("x-lg")}</button>
     </div>`);
@@ -104,7 +107,7 @@ async function onClick(e) {
   const ids = tabel.getSelected();
   const a = b.dataset.bulkAct;
   if (a === "clear") return tabel.clearSelection();
-  if (a === "grau" || a === "porumb") {
+  if (a === "grau" || a === "porumb" || a === "bani") {
     return cuIncarcare(b, async () => {
       try {
         const r = await api.post("/api/arendasi/preferinte-multiple", { ids, anul_agricol: store.an, tip_cereala: a });
@@ -116,13 +119,26 @@ async function onClick(e) {
   if (a === "plata") {
     const sel = store.arendasi.filter((om) => ids.includes(om.id));
     const deDat = roundKg(sel.reduce((s, om) => s + Math.max(rest(om), 0), 0));
-    if (!(await confirma({
+    const inBani = sel.filter((om) => cereala(om) === "bani" && rest(om) > 0);
+    const kgBani = roundKg(inBani.reduce((s, om) => s + rest(om), 0));
+    const r0 = await confirma({
       title: "Înregistrezi plata completă?", confirmLabel: "Da, înregistrează",
       message: `Se va înregistra restul de plată pentru ${ids.length} arendași, anul ${store.an}: total ${fmtKg(deDat)}. Cei deja achitați sunt ignorați.`,
-    }))) return;
+      extra: inBani.length ? html`
+        <div class="callout" style="margin-bottom:12px">💵 <div>${inBani.length} arendași sunt plătiți în bani (${fmtKg(kgBani)} echivalent).</div></div>
+        <div class="field"><label for="f-pret-bulk">Preț lei/kg pentru plata în bani</label>
+          <input class="input" id="f-pret-bulk" name="pret" inputmode="decimal" placeholder="ex: 1,10" value="${ultimulPret()}"></div>` : "",
+    });
+    if (!r0) return;
+    let pret;
+    if (inBani.length) {
+      pret = parseNr(r0.pret);
+      if (!(pret > 0)) return eroare(new Error("Introdu un preț pe kg mai mare decât 0."), "Prețul lipsește");
+      memoreazaPret(r0.pret);
+    }
     return cuIncarcare(b, async () => {
       try {
-        const r = await api.post("/api/arendasi/plata-totala-multipla", { ids, an: store.an });
+        const r = await api.post("/api/arendasi/plata-totala-multipla", { ids, an: store.an, pret_lei_kg: pret ? String(pret) : null });
         await incarcaArendasi();
         tabel.clearSelection();
         ok("Plăți înregistrate", r.mesaj);
@@ -139,7 +155,7 @@ export function update(resetPage = false) {
 
   const q = normalizeaza(filtre.q.trim());
   const rows = store.arendasi.map((om) => ({
-    om, ha: haOm(om), cer: cereala(om), dat: datorat(om), plat: platit(om), rest: rest(om), status: statusPlata(om),
+    om, ha: haOm(om), cer: cereala(om), dat: datorat(om), plat: platit(om), rest: rest(om), status: statusPlata(om), lei: leiPlatit(om),
   })).filter((r) =>
     (!q || normalizeaza(`${r.om.nume_complet} ${r.om.cnp || ""} ${r.om.adresa || ""}`).includes(q)) &&
     (!filtre.cereala || r.cer === filtre.cereala) &&
@@ -152,6 +168,7 @@ export function update(resetPage = false) {
     <span class="chip">Neachitați <b>${n("neachitat")}</b></span>
     <span class="chip">Parțial <b>${n("partial")}</b></span>
     <span class="chip">Achitați <b>${n("achitat")}</b></span>
-    <span class="chip">Rest total <b>${fmtKg(rows.reduce((s, r) => s + Math.max(r.rest, 0), 0))}</b></span>`);
+    <span class="chip">Rest total <b>${fmtKg(rows.reduce((s, r) => s + Math.max(r.rest, 0), 0))}</b></span>
+    ${rows.some((r) => r.lei > 0) ? html`<span class="chip">💵 Plătit în bani <b>${fmtLei(rows.reduce((s, r) => s + r.lei, 0))}</b></span>` : ""}`);
   tabel.setRows(rows, { resetPage });
 }

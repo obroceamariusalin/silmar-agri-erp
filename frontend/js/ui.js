@@ -125,6 +125,7 @@ export function confirma({ title, message, confirmLabel = "Confirmă", danger = 
         <button type="button" class="btn ${danger ? "btn-danger" : "btn-primary"}" data-ok autofocus>${confirmLabel}</button>`,
       onClose: () => resolve(rezultat),
     });
+    m.$(".confirm-extra")?.addEventListener("submit", (e) => { e.preventDefault(); m.$("[data-ok]").click(); });
     m.$("[data-ok]").addEventListener("click", () => {
       const f = m.$(".confirm-extra");
       rezultat = f ? Object.fromEntries([...f.elements].filter((x) => x.name).map((x) => [x.name, x.type === "checkbox" ? x.checked : x.value])) : {};
@@ -204,7 +205,10 @@ export function badgeStatusContract(status, dataExp) {
 }
 
 export function badgeCereala(c) {
+  if (c === "bani") return html`<span class="badge badge-bani">💵 Bani</span>`;
   return c === "porumb"
     ? html`<span class="badge badge-porumb">🌽 Porumb</span>`
     : html`<span class="badge badge-grau">🌾 Grâu</span>`;
 }
+
+export const ETICHETA_CEREALA = { grau: "🌾 Grâu", porumb: "🌽 Porumb", bani: "💵 Bani" };

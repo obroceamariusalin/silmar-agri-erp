@@ -1,6 +1,6 @@
 import { adaugaArendas, contractRapid, deschideDosar, descarcaRaport } from "../dialogs.js";
-import { collator, fmtCompact, fmtData, fmtHa, fmtHaScurt, fmtInt, fmtKg, fmtPct, sumHa, zileRamase } from "../format.js";
-import { cereala, datorat, haOm, platit, rest, store } from "../store.js";
+import { collator, fmtCompact, fmtData, fmtHa, fmtHaScurt, fmtInt, fmtKg, fmtLei, fmtPct, sumHa, zileRamase } from "../format.js";
+import { cereala, datorat, haOm, leiPlatit, platit, rest, store } from "../store.js";
 import { html, icon, render } from "../ui.js";
 
 export const titlu = "Dashboard";
@@ -33,12 +33,12 @@ function kpi(iconName, label, value, foot, cls = "") {
   </div>`;
 }
 
-function meter(label, plat, dat, cls = "") {
+function meter(label, plat, dat, cls = "", extra = "") {
   const pct = dat > 0 ? Math.min(1, plat / dat) : 0;
   return html`<div class="meter-row">
     <div class="meter-head"><span class="strong">${label}</span><span class="pct">${fmtPct(pct)}</span></div>
     <div class="meter ${cls}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct * 100)}" aria-label="${label}: achitat"><span style="width:${(pct * 100).toFixed(1)}%"></span></div>
-    <div class="meter-legend"><span>Datorat <b class="num">${fmtKg(dat)}</b></span><span>Achitat <b class="num">${fmtKg(plat)}</b></span><span>Rest <b class="num">${fmtKg(Math.max(dat - plat, 0))}</b></span></div>
+    <div class="meter-legend"><span>Datorat <b class="num">${fmtKg(dat)}</b></span><span>Achitat <b class="num">${fmtKg(plat)}</b></span><span>Rest <b class="num">${fmtKg(Math.max(dat - plat, 0))}</b></span>${extra ? html`<span>${extra}</span>` : ""}</div>
   </div>`;
 }
 
@@ -53,13 +53,15 @@ export function update() {
   const expirate = A.filter((om) => om.status_contract === "expirat").length;
   const faraData = A.filter((om) => om.status_contract === "necunoscut").length;
 
-  const pe = { grau: { d: 0, p: 0 }, porumb: { d: 0, p: 0 } };
+  const pe = { grau: { d: 0, p: 0 }, porumb: { d: 0, p: 0 }, bani: { d: 0, p: 0 } };
+  let leiTotal = 0;
   for (const om of A) {
     const c = cereala(om);
     pe[c].d += datorat(om);
     pe[c].p += Math.min(platit(om), datorat(om));
+    leiTotal += leiPlatit(om);
   }
-  const totD = pe.grau.d + pe.porumb.d, totP = pe.grau.p + pe.porumb.p;
+  const totD = pe.grau.d + pe.porumb.d + pe.bani.d, totP = pe.grau.p + pe.porumb.p + pe.bani.p;
 
   // Suprafață pe tarla (top 8)
   const peTarla = new Map();
@@ -100,6 +102,7 @@ export function update() {
           ${meter("Total", totP, totD)}
           ${meter("🌾 Grâu", pe.grau.p, pe.grau.d, "grau")}
           ${meter("🌽 Porumb", pe.porumb.p, pe.porumb.d, "porumb")}
+          ${pe.bani.d > 0 || leiTotal > 0 ? meter("💵 Bani (kg echivalent)", pe.bani.p, pe.bani.d, "bani", html`Plătit <b class="num">${fmtLei(leiTotal)}</b>`) : ""}
         </div>
       </div>
       <div class="card">

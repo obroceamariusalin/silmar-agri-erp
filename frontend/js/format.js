@@ -15,6 +15,11 @@ export const fmtHaScurt = (x) => F_HA2.format(Number(x) || 0);
 export const fmtNumHa = (x) => F_HA.format(Number(x) || 0);
 export const fmtKg = (x) => `${F_KG.format(Math.round(Number(x) || 0))} kg`;
 export const fmtInt = (x) => F_INT.format(Number(x) || 0);
+const F_LEI = nf(2, 2);
+export const fmtLei = (x) => `${F_LEI.format(Number(x) || 0)} lei`;
+export const fmtPret = (x) => `${nf(2, 4).format(Number(x) || 0)} lei/kg`;
+/** "1,10" -> 1.1 ; "" -> NaN */
+export const parseNr = (s) => parseFloat(String(s ?? "").trim().replace(/\s/g, "").replace(",", "."));
 export const fmtPct = (x) => `${Math.round((Number(x) || 0) * 100)}%`;
 
 /** Compact pentru KPI: 1.284 / 12,9 mii / 4,2 mil. */
