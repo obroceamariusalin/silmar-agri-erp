@@ -80,6 +80,11 @@ export function memoreazaPret(p) {
   try { localStorage.setItem("ultimulPretLeiKg", String(p)); } catch { /* ignore */ }
 }
 
+/** Contractele reziliate contează la plăți doar până în anul rezilierii (inclusiv). */
+export const activInAn = (om, an = store.an) =>
+  om.stare !== "reziliat" || (om.data_reziliere && +om.data_reziliere.slice(0, 4) >= an);
+export const esteActiv = (om) => om.stare !== "reziliat";
+
 /** 'achitat' | 'partial' | 'neachitat' | 'fara_teren' */
 export function statusPlata(om, an = store.an) {
   const d = datorat(om);
@@ -91,6 +96,7 @@ export function statusPlata(om, an = store.an) {
 
 export function toateTerenurile() {
   const out = [];
-  for (const om of store.arendasi) for (const t of om.terenuri) out.push({ ...t, proprietar: om });
+  // doar terenurile arendate efectiv (fără cele rămase în dosare reziliate)
+  for (const om of store.arendasi) if (esteActiv(om)) for (const t of om.terenuri) out.push({ ...t, proprietar: om });
   return out;
 }

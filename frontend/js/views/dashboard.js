@@ -1,6 +1,6 @@
 import { adaugaArendas, contractRapid, deschideDosar, descarcaRaport } from "../dialogs.js";
 import { collator, fmtCompact, fmtData, fmtHa, fmtHaScurt, fmtInt, fmtKg, fmtLei, fmtPct, sumHa, zileRamase } from "../format.js";
-import { cereala, datorat, haOm, leiPlatit, platit, rest, store } from "../store.js";
+import { activInAn, cereala, datorat, haOm, leiPlatit, platit, rest, store } from "../store.js";
 import { html, icon, render } from "../ui.js";
 
 export const titlu = "Dashboard";
@@ -44,7 +44,8 @@ function meter(label, plat, dat, cls = "", extra = "") {
 
 export function update() {
   if (!root) return;
-  const A = store.arendasi;
+  const A = store.arendasi.filter((om) => activInAn(om));
+  const reziliati = store.arendasi.length - store.arendasi.filter((om) => om.stare !== "reziliat").length;
   const totalHa = sumHa(A.map(haOm));
   const parcele = A.reduce((s, om) => s + om.terenuri.length, 0);
   const faraCnp = A.filter((om) => !om.cnp).length;
@@ -86,7 +87,8 @@ export function update() {
     </div>
 
     <div class="kpis">
-      ${kpi("people", "Arendași", fmtInt(A.length), faraCnp ? `${faraCnp} fără CNP completat` : "Toți au CNP/CUI")}
+      ${kpi("people", "Arendași", fmtInt(store.arendasi.length - reziliati),
+            [faraCnp ? `${faraCnp} fără CNP` : "Toți au CNP/CUI", reziliati ? `${reziliati} reziliați` : ""].filter(Boolean).join(" · "))}
       ${kpi("map", "Suprafață arendată", html`${fmtHaScurt(totalHa)}<small>ha</small>`, `${fmtInt(parcele)} parcele · ${fmtHa(totalHa)}`)}
       ${kpi("file-earmark-check", "Contracte active", fmtInt(active), faraData ? `${faraData} fără dată de contract` : "Toate au dată")}
       ${kpi(curand ? "hourglass-split" : "calendar-check", "Expiră în 6 luni", fmtInt(curand),

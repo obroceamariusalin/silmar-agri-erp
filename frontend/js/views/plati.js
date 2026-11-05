@@ -2,7 +2,7 @@ import { api } from "../api.js";
 import { deschideDosar, descarcaRaport } from "../dialogs.js";
 import { collator, fmtHa, fmtInt, fmtKg, fmtLei, normalizeaza, parseNr, roundKg, sumHa } from "../format.js";
 import {
-  cereala, datorat, haOm, incarcaArendasi, leiPlatit, memoreazaPret, platit, rest, statusPlata, store, ultimulPret,
+  activInAn, cereala, datorat, haOm, incarcaArendasi, leiPlatit, memoreazaPret, platit, rest, statusPlata, store, ultimulPret,
 } from "../store.js";
 import { DataTable } from "../table.js";
 import { $, badgeCereala, confirma, cuIncarcare, debounce, eroare, html, icon, ok, render } from "../ui.js";
@@ -154,7 +154,7 @@ export function update(resetPage = false) {
   render(loc, html`<option value="">Toate localitățile</option>${localitati.map((l) => html`<option ${l === filtre.localitate ? "selected" : ""}>${l}</option>`)}`);
 
   const q = normalizeaza(filtre.q.trim());
-  const rows = store.arendasi.map((om) => ({
+  const rows = store.arendasi.filter((om) => activInAn(om)).map((om) => ({
     om, ha: haOm(om), cer: cereala(om), dat: datorat(om), plat: platit(om), rest: rest(om), status: statusPlata(om), lei: leiPlatit(om),
   })).filter((r) =>
     (!q || normalizeaza(`${r.om.nume_complet} ${r.om.cnp || ""} ${r.om.adresa || ""}`).includes(q)) &&

@@ -199,6 +199,7 @@ export function badgeStatusContract(status, dataExp) {
     expira_curand: ["warn", "hourglass-split", "Expiră curând"],
     expirat: ["danger", "x-circle", "Expirat"],
     necunoscut: ["", "question-circle", "Fără dată"],
+    reziliat: ["danger", "file-earmark-x", "Reziliat"],
   };
   const [cls, ic, text] = map[status] || map.necunoscut;
   return html`<span class="badge ${cls ? `badge-${cls}` : ""}" title="${dataExp ? `Expiră la ${dataExp}` : "Completează nr./data contractului"}">${icon(ic)}${text}</span>`;

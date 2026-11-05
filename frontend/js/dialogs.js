@@ -1,5 +1,6 @@
 // Modale de lucru: dosar arendaș, adăugare arendaș (cu import PDF), contract rapid, editare teren.
 import { api, descarca } from "./api.js";
+import { randeazaIstoric, rezilieazaDialog, transferDialog } from "./reziliere.js";
 import {
   eroareIdentificator, eroareSuprafata, fmtData, fmtHa, fmtKg, fmtLei, fmtNumHa, fmtPret, initiale, parseNr, sumHa,
 } from "./format.js";
@@ -85,6 +86,11 @@ export function adaugaArendas() {
         ${field({ name: "adresa", label: "Adresă", placeholder: "ex: Comuna Argetoaia, Sat Salcia, nr. 12", col: 12 })}
         ${field({ name: "nr_data_contract", label: "Nr. / dată contract", placeholder: "ex: 122/23.11.2017", col: 8 })}
         ${field({ name: "durata_contract", label: "Durată (ani)", value: "7", col: 4, inputmode: "numeric" })}
+        <div class="form-section">Carte de identitate (opțional)</div>
+        ${field({ name: "ci_seria", label: "Seria", col: 3, placeholder: "DZ" })}
+        ${field({ name: "ci_numar", label: "Număr", col: 3, inputmode: "numeric" })}
+        ${field({ name: "ci_eliberat", label: "Eliberat de", col: 3 })}
+        ${field({ name: "ci_data", label: "Data eliberării", col: 3, placeholder: "zz.ll.aaaa" })}
         <div class="form-section">Terenuri</div>
         <div class="col-12">
           <div class="teren-row-head"><span>Tarla</span><span>Parcelă</span><span>Suprafață (ha)</span><span></span></div>
@@ -201,6 +207,7 @@ export function contractRapid() {
       if (v.salveaza) {
         const om = await api.post("/api/arendasi", {
           nume_complet: v.nume, cnp: v.cnp, adresa: v.adresa,
+          ci_seria: v.ci_seria, ci_numar: v.ci_numar, ci_eliberat: v.ci_eliberat, ci_data: v.ci_data,
           terenuri: terenuri.filter((t) => t.tarla && t.parcela && Number(t.ha) > 0)
             .map((t) => ({ tarlaua: t.tarla, parcela: t.parcela, suprafata_ha: t.ha })),
         });
@@ -269,8 +276,19 @@ export function deschideDosar(id, tabInitial = "date") {
           ${badgeStatusContract(om.status_contract, fmtData(om.data_expirare))}
         </div>
       </div>`);
+    const precedent = om.arendas_precedent_id ? getArendas(om.arendas_precedent_id) : null;
+    const succesori = store.arendasi.filter((a) => a.arendas_precedent_id === om.id);
     render(m.$("[data-dosar]"), html`
-      <div class="mini-stats">
+      ${om.stare === "reziliat" ? html`
+        <div class="callout warn" style="margin:14px 22px 0;align-items:center;flex-wrap:wrap">
+          ${icon("file-earmark-x")}
+          <div style="flex:1;min-width:200px"><b>Contract reziliat</b> din ${fmtData(om.data_reziliere)}${om.motiv_reziliere ? ` — ca urmare a ${om.motiv_reziliere}` : ""}.
+            ${succesori.length ? html`<br>Terenurile au trecut la ${succesori.map((s, i) => html`${i ? ", " : ""}<a href="#" data-dosar-link="${s.id}">${s.nume_complet}</a>`)}.` : ""}</div>
+          <button class="btn btn-sm" data-reactiveaza>${icon("arrow-counterclockwise")} Anulează rezilierea</button>
+        </div>` : ""}
+      ${precedent ? html`<div class="callout" style="margin:14px 22px 0">${icon("diagram-2")}
+        <div>Contract moștenit / preluat de la <a href="#" data-dosar-link="${precedent.id}">${precedent.nume_complet}</a>.</div></div>` : ""}
+      <div class="mini-stats" style="${om.stare === "reziliat" || precedent ? "margin-top:14px;border-top:1px solid var(--border)" : ""}">
         <div class="mini-stat"><div class="l">Suprafață</div><div class="v">${fmtHa(om.suprafata_totala)}</div></div>
         <div class="mini-stat"><div class="l">Datorat ${store.an}</div><div class="v">${fmtKg(datorat(om))}</div></div>
         <div class="mini-stat"><div class="l">Plătit ${store.an}</div><div class="v" style="color:var(--ok)">${fmtKg(platit(om))}</div></div>
@@ -286,9 +304,22 @@ export function deschideDosar(id, tabInitial = "date") {
     ({ date: panelDate, terenuri: panelTerenuri, plati: panelPlati, documente: panelDocumente })[tab](panel, om);
   }
 
-  m.el.addEventListener("click", (e) => {
+  m.el.addEventListener("click", async (e) => {
     const t = e.target.closest("[data-tab]");
-    if (t) { tab = t.dataset.tab; deseneaza(); }
+    if (t) { tab = t.dataset.tab; deseneaza(); return; }
+    const link = e.target.closest("[data-dosar-link]");
+    if (link) {
+      e.preventDefault();
+      m.close();
+      deschideDosar(+link.dataset.dosarLink);
+      return;
+    }
+    if (e.target.closest("[data-reactiveaza]")) {
+      const om = getArendas(id);
+      if (!(await confirma({ title: "Anulezi rezilierea?", confirmLabel: "Da, reactivează",
+        message: `Contractul lui ${om.nume_complet} redevine activ. Terenurile transferate între timp NU se mută înapoi automat (le poți transfera manual).` }))) return;
+      try { upsertArendas(await api.post(`/api/arendasi/${id}/reactivare`)); ok("Contract reactivat"); } catch (err) { eroare(err); }
+    }
   });
 
   // ---------------- Date & contract
@@ -300,8 +331,19 @@ export function deschideDosar(id, tabInitial = "date") {
         ${field({ name: "adresa", label: "Adresă", value: om.adresa || "", col: 12 })}
         ${field({ name: "nr_data_contract", label: "Nr. / dată contract", value: om.nr_data_contract || "", col: 6, placeholder: "ex: 122/23.11.2017", hint: om.data_expirare ? `Expiră la ${fmtData(om.data_expirare)}` : "Data din contract permite calculul expirării" })}
         ${field({ name: "durata_contract", label: "Durată (ani)", value: om.durata_contract || "7", col: 6, inputmode: "numeric" })}
+        <div class="form-section">Carte de identitate</div>
+        ${field({ name: "ci_seria", label: "Seria", value: om.ci_seria || "", col: 3, placeholder: "DZ" })}
+        ${field({ name: "ci_numar", label: "Număr", value: om.ci_numar || "", col: 3, inputmode: "numeric" })}
+        ${field({ name: "ci_eliberat", label: "Eliberat de", value: om.ci_eliberat || "", col: 3, placeholder: "SPCLEP Craiova" })}
+        ${field({ name: "ci_data", label: "Data eliberării", value: om.ci_data || "", col: 3, placeholder: "zz.ll.aaaa" })}
         <div class="col-12 row"><span class="spacer"></span><button class="btn btn-primary" data-save>${icon("check2")} Salvează modificările</button></div>
       </form>
+      <div class="card" style="box-shadow:none;margin-top:22px"><div class="card-body row" style="gap:10px">
+        <div style="flex:1;min-width:200px"><div class="strong">Documente contract</div>
+          <div class="small muted">Contract completat cu datele și terenurile din dosar · act adițional de reziliere</div></div>
+        <button class="btn" data-gen-contract>${icon("file-earmark-word")} Generează contract</button>
+        ${om.stare !== "reziliat" ? html`<button class="btn btn-danger-soft" data-reziliaza>${icon("file-earmark-x")} Reziliază contractul</button>` : ""}
+      </div></div>
       <div class="danger-zone" style="margin-top:22px">
         <div style="flex:1;min-width:200px"><div class="strong">Șterge dosarul</div><div class="small muted">Se șterg definitiv terenurile, plățile și preferințele.</div></div>
         <button class="btn btn-danger-soft" data-delete>${icon("trash3")} Șterge dosar</button>
@@ -318,6 +360,13 @@ export function deschideDosar(id, tabInitial = "date") {
         ok("Date salvate");
       } catch (err) { aratoEroriServer(form, err); }
     }));
+    panel.querySelector("[data-gen-contract]").addEventListener("click", (e) => cuIncarcare(e.currentTarget, async () => {
+      try {
+        await descarca("GET", `/api/arendasi/${om.id}/contract`, undefined, `Contract_${om.nume_complet}.docx`);
+        ok("Contract generat", om.ci_seria ? "" : "Completează datele din CI ca să apară în contract.");
+      } catch (err) { eroare(err); }
+    }));
+    panel.querySelector("[data-reziliaza]")?.addEventListener("click", () => rezilieazaDialog(om));
     panel.querySelector("[data-delete]").addEventListener("click", async () => {
       const r = await confirma({
         title: "Ștergi dosarul?", danger: true, confirmLabel: "Șterge definitiv",
@@ -359,7 +408,12 @@ export function deschideDosar(id, tabInitial = "date") {
             </div></td></tr>`)}</tbody>
           <tfoot><tr><td data-label="">Total</td><td class="m-hide"></td><td></td><td class="right num" data-label="Suprafață">${fmtHa(total)}</td><td></td></tr></tfoot>
         </table>
-      </div>` : html`<div class="dt-empty">${icon("map")}Niciun teren înregistrat.</div>`}`);
+      </div>` : html`<div class="dt-empty">${icon("map")}Niciun teren înregistrat.</div>`}
+      ${om.terenuri.length ? html`<div class="row" style="margin-top:14px"><span class="spacer"></span>
+        <button class="btn" data-transfer>${icon("arrow-left-right")} Transferă terenuri (moștenire / vânzare)</button></div>` : ""}
+      <div data-istoric></div>`);
+    panel.querySelector("[data-transfer]")?.addEventListener("click", () => transferDialog(om));
+    randeazaIstoric(panel.querySelector("[data-istoric]"), om);
     const form = panel.querySelector("[data-form]");
     form.addEventListener("submit", (e) => { e.preventDefault(); panel.querySelector("[data-add]").click(); });
     panel.querySelector("[data-add]").addEventListener("click", (e) => { e.preventDefault(); cuIncarcare(e.currentTarget, async () => {

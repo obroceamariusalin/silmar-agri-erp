@@ -25,11 +25,13 @@ export function mount(el) {
       <div class="toolbar">
         <div class="input-icon">${icon("search")}<input class="input input-sm" type="search" placeholder="Caută nume, CNP, adresă, nr. contract…" data-f="q" value="${filtre.q}"></div>
         <select class="select select-sm" data-f="status" aria-label="Status contract">
-          <option value="">Toate contractele</option>
+          <option value="">Contracte în vigoare</option>
           <option value="activ">Active</option>
           <option value="expira_curand">Expiră în 6 luni</option>
           <option value="expirat">Expirate</option>
           <option value="necunoscut">Fără dată</option>
+          <option value="reziliat">Reziliate</option>
+          <option value="toate">Toate (inclusiv reziliate)</option>
         </select>
         <select class="select select-sm" data-f="localitate" aria-label="Localitate"></select>
         <label class="check small"><input type="checkbox" data-f="incomplete" ${filtre.incomplete ? "checked" : ""}> Doar date incomplete</label>
@@ -82,7 +84,7 @@ export function update(resetPage = false) {
   const q = normalizeaza(filtre.q.trim());
   const rows = store.arendasi.filter((o) =>
     (!q || normalizeaza(`${o.nume_complet} ${o.cnp || ""} ${o.adresa || ""} ${o.nr_data_contract || ""}`).includes(q)) &&
-    (!filtre.status || o.status_contract === filtre.status) &&
+    (filtre.status === "toate" || (!filtre.status ? o.stare !== "reziliat" : o.status_contract === filtre.status)) &&
     (!filtre.localitate || o.localitate === filtre.localitate) &&
     (!filtre.incomplete || !o.cnp || !o.adresa || !o.nr_data_contract || o.terenuri.length === 0));
   tabel.setRows(rows, { resetPage });
