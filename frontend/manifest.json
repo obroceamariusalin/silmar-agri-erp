@@ -1,16 +1,17 @@
 {
-  "name": "Silmar Solution SRL",
+  "name": "Silmar Agri ERP",
   "short_name": "Silmar",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f8f9fa",
-  "theme_color": "#198754",
+  "background_color": "#f4f6f5",
+  "theme_color": "#12372a",
   "icons": [
     {
-      "src": "./icon.png",
-      "sizes": "512x512",
+      "src": "/icon.png",
+      "sizes": "1024x559",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
