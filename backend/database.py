@@ -1,18 +1,32 @@
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-load_dotenv()
-SQLALCHEMY_DATABASE_URL = os.environ.get("DATABASE_URL")
+from config import DATABASE_URL
 
-if not SQLALCHEMY_DATABASE_URL:
-    SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
+_is_sqlite = DATABASE_URL.startswith("sqlite")
 
-if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
-    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,  # evită erorile "server closed the connection" după inactivitate pe Render
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
+)
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+if _is_sqlite:
+    @event.listens_for(engine, "connect")
+    def _sqlite_fk(dbapi_conn, _):
+        # SQLite ignoră cheile străine dacă nu sunt activate explicit
+        dbapi_conn.execute("PRAGMA foreign_keys=ON")
+
+SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
