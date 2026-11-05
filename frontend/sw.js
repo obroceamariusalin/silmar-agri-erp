@@ -1,7 +1,7 @@
 // Service worker: "network-first" pentru fișierele aplicației (mereu ultima versiune când există
 // internet, copia din cache când semnalul e slab pe câmp). Datele (/api) NU se pun niciodată în cache.
-const CACHE = "silmar-shell-v2";
-const SHELL = ["/", "/login", "/css/app.css", "/js/app.js", "/icon.png", "/manifest.json"];
+const CACHE = "silmar-shell-v3";
+const SHELL = ["/", "/login", "/css/app.css", "/js/app.js", "/icons/icon.svg", "/icons/favicon.svg", "/manifest.json"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));

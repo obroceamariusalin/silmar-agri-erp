@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="cer" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f5d42"/>
+      <stop offset="1" stop-color="#0c2a1f"/>
+    </linearGradient>
+    <radialGradient id="soare" cx="0.42" cy="0.38" r="0.7">
+      <stop offset="0" stop-color="#fff1bf"/>
+      <stop offset="0.45" stop-color="#f8c95a"/>
+      <stop offset="1" stop-color="#e8952b"/>
+    </radialGradient>
+    <radialGradient id="aura" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.55" stop-color="#f8c95a" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#f8c95a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="camp" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a8a5f"/>
+      <stop offset="1" stop-color="#1e5a3c"/>
+    </linearGradient>
+    <linearGradient id="umbraJos" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c2a1f" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0c2a1f" stop-opacity="0.75"/>
+    </linearGradient>
+    <linearGradient id="auriu" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="1" stop-color="#f3c35a"/>
+    </linearGradient>
+    <clipPath id="rotunjit"><rect width="512" height="512" rx="120"/></clipPath>
+    <clipPath id="clipCamp"><path d="M0 330 Q 256 300 512 330 L512 512 L0 512 Z"/></clipPath>
+  </defs>
+  <g clip-path="url(#rotunjit)">
+    <rect width="512" height="512" fill="url(#cer)"/>
+    
+    <circle cx="256" cy="230" r="158" fill="url(#soare)"/>
+    <path d="M0 330 Q 256 300 512 330 L512 512 L0 512 Z" fill="url(#camp)"/>
+    
+    
+    
+    
+    <path d="M256 470 C 253 380, 258 210, 256 110" fill="none" stroke="#0f3324" stroke-width="20" stroke-linecap="round"/>
+    <path d="M0 -54.0 C 32.0 -24.3, 32.0 29.7, 0 54.0 C -32.0 29.7, -32.0 -24.3, 0 -54.0 Z" transform="translate(219.2 272.0) rotate(-30)" fill="#0f3324"/>
+    <path d="M0 -54.0 C 32.0 -24.3, 32.0 29.7, 0 54.0 C -32.0 29.7, -32.0 -24.3, 0 -54.0 Z" transform="translate(292.8 272.0) rotate(30)" fill="#0f3324"/>
+    <path d="M0 -49.7 C 29.4 -22.4, 29.4 27.3, 0 49.7 C -29.4 27.3, -29.4 -22.4, 0 -49.7 Z" transform="translate(222.1 206.0) rotate(-30)" fill="#0f3324"/>
+    <path d="M0 -49.7 C 29.4 -22.4, 29.4 27.3, 0 49.7 C -29.4 27.3, -29.4 -22.4, 0 -49.7 Z" transform="translate(289.9 206.0) rotate(30)" fill="#0f3324"/>
+    <path d="M0 -45.4 C 26.9 -20.4, 26.9 24.9, 0 45.4 C -26.9 24.9, -26.9 -20.4, 0 -45.4 Z" transform="translate(225.1 140.0) rotate(-30)" fill="#0f3324"/>
+    <path d="M0 -45.4 C 26.9 -20.4, 26.9 24.9, 0 45.4 C -26.9 24.9, -26.9 -20.4, 0 -45.4 Z" transform="translate(286.9 140.0) rotate(30)" fill="#0f3324"/>
+    <path d="M0 -51.3 C 23.0 -23.1, 23.0 28.2, 0 51.3 C -23.0 28.2, -23.0 -23.1, 0 -51.3 Z" transform="translate(256.0 97.1) rotate(0)" fill="#0f3324"/>
+    
+    
+  </g>
+</svg>
