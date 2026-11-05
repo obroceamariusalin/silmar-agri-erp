@@ -70,6 +70,8 @@ def tabel_primarie(arendasi) -> bytes:
     total_general = calcule.ZERO
     nr_crt = 1
     for om in sorted(arendasi, key=lambda x: _txt(x.nume_complet).lower()):
+        if (om.stare or "activ") == "reziliat":
+            continue  # tabelul centralizator cuprinde doar contractele în vigoare
         suprafata = calcule.suprafata_totala(om.terenuri)
         if suprafata <= 0:
             continue
@@ -167,6 +169,8 @@ def borderou_excel(arendasi, an: int) -> bytes:
 
     nr = {"grau": 1, "porumb": 1, "bani": 1}
     for om in arendasi:
+        if not calcule.activ_in_an(om, an):
+            continue
         suprafata_totala = float(calcule.suprafata_totala(om.terenuri))
         if suprafata_totala == 0:
             continue
@@ -292,12 +296,7 @@ def _paragrafe(doc):
 
 
 def contract_rapid(date: schemas.ContractRapidCreate) -> bytes:
-    gen, domiciliat, identificat = "domnul/doamna", "domiciliat(ă)", "identificat(ă)"
-    if date.cnp and len(date.cnp) == 13:
-        if date.cnp[0] in "1357":
-            gen, domiciliat, identificat = "domnul", "domiciliat", "identificat"
-        elif date.cnp[0] in "2468":
-            gen, domiciliat, identificat = "doamna", "domiciliată", "identificată"
+    gen, domiciliat, identificat = calcule.gen_din_cnp(date.cnp)
 
     linii, total_ha = [], calcule.ZERO
     for t in date.terenuri:
@@ -326,6 +325,95 @@ def contract_rapid(date: schemas.ContractRapidCreate) -> bytes:
     return _bytes(doc)
 
 
+def contract_pentru_arendas(om) -> bytes:
+    """Contract nou din șablon, completat cu datele unui arendaș din baza de date (ex. moștenitorul)."""
+    date = schemas.ContractRapidCreate(
+        nume=om.nume_complet,
+        cnp=om.cnp,
+        adresa=om.adresa or "...",
+        ci_seria=om.ci_seria or "...",
+        ci_numar=om.ci_numar or "...",
+        ci_eliberat=om.ci_eliberat or "...",
+        ci_data=om.ci_data or "...",
+        terenuri=[schemas.TerenRapid(tarla=t.tarlaua or "...", parcela=t.parcela or "...",
+                                     ha=calcule.rotunjeste_ha(t.suprafata_ha)) for t in om.terenuri],
+    )
+    return contract_rapid(date)
+
+
+# ------------------------------------------------------------------ Act adițional de reziliere
+def _doc_times(marime: int = 12) -> Document:
+    doc = Document()
+    stil = doc.styles["Normal"]
+    stil.font.name = FONT_CONTRACT
+    stil.font.size = Pt(marime)
+    stil.element.get_or_add_rPr().get_or_add_rFonts().set(qn("w:eastAsia"), FONT_CONTRACT)
+    stil.paragraph_format.space_after = Pt(0)
+    s = doc.sections[0]
+    s.left_margin = s.right_margin = Cm(2.5)
+    s.top_margin = s.bottom_margin = Cm(2)
+    return doc
+
+
+def _p(doc, *bucati, align=None, indent_cm=None, spatiu_dupa=0):
+    """Adaugă un paragraf din bucăți (text, bold)."""
+    p = doc.add_paragraph()
+    if align is not None:
+        p.alignment = align
+    if indent_cm is not None:
+        p.paragraph_format.first_line_indent = Cm(indent_cm)
+    p.paragraph_format.space_after = Pt(spatiu_dupa)
+    for b in bucati:
+        text, bold = (b, False) if isinstance(b, str) else b
+        p.add_run(text).bold = bold
+    return p
+
+
+def act_reziliere(om, cerere: schemas.RezilieRequest) -> bytes:
+    """Act adițional de reziliere, după modelul folosit la Primăria Argetoaia."""
+    pers = cerere.semnatar or om  # la deces semnează moștenitorul
+    gen, domiciliat, identificat = calcule.gen_din_cnp(pers.cnp)
+    nr, data = calcule.nr_si_data_contract(om.nr_data_contract)
+    contract = f"Contractul de arendare nr. {nr} / {data}"
+    seria = _txt(pers.ci_seria, "....")
+    numar = _txt(pers.ci_numar, "...........")
+    data_ef = cerere.data_reziliere.strftime("%d.%m.%Y") if cerere.data_reziliere else "_________"
+    J = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+    doc = _doc_times()
+    _p(doc, "PRIMARIA COMUNEI ARGETOAIA,")
+    _p(doc, "JUDETUL DOLJ")
+    _p(doc, "NR. .............................din Registrul arendelor", spatiu_dupa=36)
+
+    _p(doc, ("ACT ADIȚIONAL NR.       /", True), align=WD_ALIGN_PARAGRAPH.CENTER)
+    _p(doc, "la Contract de arendare", align=WD_ALIGN_PARAGRAPH.CENTER)
+    _p(doc, f"înregistrat la Primăria Argetoaia sub nr.  {nr} / {data}", align=WD_ALIGN_PARAGRAPH.CENTER, spatiu_dupa=36)
+
+    _p(doc, "I.. ", ("PARTILE CONTRACTANTE", True))
+    _p(doc, ("1", True), f". Intre {gen} {_txt(pers.nume_complet)} {domiciliat} {_txt(pers.adresa, '....................')}, "
+       f"{identificat} cu CI seria {seria}, nr. {numar}, proprietar/moștenitor al terenului, in calitate de ",
+       ("arendator", True), ",", align=J, indent_cm=2)
+    _p(doc, " și")
+    _p(doc, ("2", True), f". Subscrisa SILMAR SOLUTION SRL, cu sediul în comuna Argetoaia, sat Poiana Fîntînii, "
+       f"str. Bălăcești, nr. 51, județul Dolj, CUI {FIRMA_CUI} , în calitate de ", ("arendas", True), ",",
+       align=J, indent_cm=2)
+    _p(doc, f"Am convenit încheierea prezentului act adițional la {contract} cu respectarea prevederilor "
+       "Legii 287/2009 privind Codul civil prin care stabilim :", align=J, indent_cm=1.25, spatiu_dupa=12)
+
+    motiv = cerere.motiv_text.rstrip(".")
+    _p(doc, "-   ", ("REZILIEREA", True), f" de comun acord a Contractului de arendare nr. {nr} / {data} ca urmare a {motiv}.",
+       align=J, indent_cm=1.25, spatiu_dupa=12)
+    _p(doc, f"Prezentul act adițional modifică {contract} începând cu data de {data_ef}, "
+       "pentru care suntem de acord și semnăm.", align=J, indent_cm=1.25, spatiu_dupa=36)
+
+    semn = doc.add_table(rows=1, cols=2)
+    for cell, text in zip(semn.rows[0].cells, ("ARENDAȘ", "ARENDATOR,")):
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run(text).bold = True
+    return _bytes(doc)
+
+
 # ------------------------------------------------------------------ CSV
 def csv_arendasi(arendasi, an: int) -> bytes:
     import csv
@@ -333,7 +421,7 @@ def csv_arendasi(arendasi, an: int) -> bytes:
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(["Nume", "CNP/CUI", "Localitate", "Nr./data contract", "Durata (ani)",
-                "Nr. terenuri", "Suprafata (ha)", f"Cereala {an}", "Datorat (kg)", "Platit (kg)", "Rest (kg)"])
+                "Nr. terenuri", "Suprafata (ha)", f"Cereala {an}", "Datorat (kg)", "Platit (kg)", "Rest (kg)", "Stare"])
     for om in sorted(arendasi, key=lambda x: _txt(x.nume_complet).lower()):
         ha = calcule.suprafata_totala(om.terenuri)
         dat = calcule.kg_datorat(ha)
@@ -344,6 +432,7 @@ def csv_arendasi(arendasi, an: int) -> bytes:
             f"{ha:.4f}".replace(".", ","), calcule.cereala_pentru_an(om.preferinte, an),
             f"{dat:.2f}".replace(".", ","), f"{plat:.2f}".replace(".", ","),
             f"{dat - plat:.2f}".replace(".", ","),
+            "reziliat " + om.data_reziliere.strftime("%d.%m.%Y") if (om.stare == "reziliat" and om.data_reziliere) else (om.stare or "activ"),
         ])
     # BOM ca Excel să recunoască diacriticele
     return ("﻿" + buf.getvalue()).encode("utf-8")

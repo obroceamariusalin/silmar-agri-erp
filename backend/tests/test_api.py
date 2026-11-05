@@ -146,6 +146,81 @@ def test_plata_in_bani_si_borderou(client):
     client.delete(f"/api/arendasi/{om['id']}")
 
 
+def test_reziliere_deces_cu_mostenitor(client):
+    cnp_mama = cnp_valid("245030312345")
+    cnp_fiica = cnp_valid("275060612345")
+    om = client.post("/api/arendasi", json={
+        "nume_complet": "Iovinceanu Ileana", "cnp": cnp_mama, "adresa": "Com.Argetoaia, Jud.Dolj",
+        "nr_data_contract": "152/26.04.2024", "ci_seria": "dz", "ci_numar": "111111",
+        "terenuri": [{"tarlaua": "10", "parcela": "1", "suprafata_ha": "1,5"},
+                     {"tarlaua": "11", "parcela": "2", "suprafata_ha": "0,5"}],
+    }).json()
+    assert om["ci_seria"] == "DZ"
+    t1, t2 = (t["id"] for t in om["terenuri"])
+
+    cerere = {
+        "motiv_tip": "deces", "motiv_text": "decesului arendatorului Iovinceanu Ileana", "data_reziliere": "2026-05-01",
+        "semnatar": {"nume_complet": "Iovinceanu Elvira", "cnp": cnp_fiica, "adresa": "Sat Argetoaia, nr. 113",
+                     "ci_seria": "DZ", "ci_numar": "641070"},
+    }
+    # actul adițional (fără modificări în baza de date)
+    r = client.post(f"/api/arendasi/{om['id']}/reziliere/act", json=cerere)
+    assert r.status_code == 200
+    text = "\n".join(p.text for p in Document(io.BytesIO(r.content)).paragraphs)
+    assert "Intre doamna Iovinceanu Elvira domiciliată Sat Argetoaia, nr. 113" in text
+    assert "CI seria DZ, nr. 641070" in text
+    assert "REZILIEREA de comun acord a Contractului de arendare nr. 152 / 26.04.2024 ca urmare a decesului arendatorului Iovinceanu Ileana." in text
+    assert "începând cu data de 01.05.2026" in text
+    assert client.get(f"/api/arendasi/{om['id']}").json()["stare"] == "activ"
+
+    # reziliere + moștenire: dosar nou pentru fiică, cu terenurile mamei
+    cerere["transfer"] = {"nou": {**cerere["semnatar"], "nr_data_contract": "200/02.05.2026"}}
+    r = client.post(f"/api/arendasi/{om['id']}/reziliere", json=cerere)
+    assert r.status_code == 200, r.text
+    vechi, nou = r.json()["arendas"], r.json()["nou"]
+    assert vechi["stare"] == "reziliat" and vechi["status_contract"] == "reziliat" and vechi["terenuri"] == []
+    assert vechi["data_reziliere"] == "2026-05-01"
+    assert nou["nume_complet"] == "Iovinceanu Elvira" and nou["arendas_precedent_id"] == om["id"]
+    assert {t["id"] for t in nou["terenuri"]} == {t1, t2} and nou["suprafata_totala"] == 2.0
+
+    ist = client.get(f"/api/arendasi/{nou['id']}/istoric-terenuri").json()
+    assert len(ist) == 2 and ist[0]["de_la_nume"] == "Iovinceanu Ileana" and ist[0]["tarlaua"] in ("10", "11")
+
+    # contract nou pentru moștenitoare, cu terenurile preluate
+    r = client.get(f"/api/arendasi/{nou['id']}/contract")
+    text = "\n".join(p.text for p in Document(io.BytesIO(r.content)).paragraphs)
+    assert "Iovinceanu Elvira" in text and "15000 mp" in text and "5000 mp" in text and "2.00" in text
+
+    # dosarul reziliat nu mai apare în tabelul pentru primărie
+    tabel = Document(io.BytesIO(client.get("/api/rapoarte/tabel-primarie").content)).tables[0]
+    nume = [row.cells[1].text for row in tabel.rows]
+    assert "Iovinceanu Elvira" in nume and "Iovinceanu Ileana" not in nume
+
+    assert client.post(f"/api/arendasi/{om['id']}/reziliere", json=cerere).status_code == 400  # deja reziliat
+    assert client.post(f"/api/arendasi/{om['id']}/reactivare").json()["stare"] == "activ"
+    client.delete(f"/api/arendasi/{nou['id']}")
+    client.delete(f"/api/arendasi/{om['id']}")
+
+
+def test_reziliere_renuntare_si_transfer_partial(client):
+    a = client.post("/api/arendasi", json={"nume_complet": "Vanzator Teren", "terenuri": [
+        {"tarlaua": "1", "parcela": "1", "suprafata_ha": 1}, {"tarlaua": "2", "parcela": "2", "suprafata_ha": 2}]}).json()
+    b = client.post("/api/arendasi", json={"nume_complet": "Cumparator Teren"}).json()
+    r = client.post(f"/api/arendasi/{a['id']}/transfer-terenuri",
+                    json={"existent_id": b["id"], "teren_ids": [a["terenuri"][0]["id"]], "motiv": "vânzare"})
+    assert r.status_code == 200
+    assert r.json()["arendas"]["suprafata_totala"] == 2 and r.json()["nou"]["suprafata_totala"] == 1
+    assert r.json()["arendas"]["stare"] == "activ"
+    r = client.post(f"/api/arendasi/{a['id']}/transfer-terenuri", json={"existent_id": a["id"]})
+    assert r.status_code == 400
+    r = client.post(f"/api/arendasi/{a['id']}/reziliere", json={"motiv_tip": "renuntare", "motiv_text": ""})
+    assert r.status_code == 422 and "motivul" in r.json()["detail"]
+    r = client.post(f"/api/arendasi/{a['id']}/reziliere", json={"motiv_tip": "renuntare", "motiv_text": "dorinței arendatorului de a nu mai arenda terenul"})
+    assert r.json()["arendas"]["stare"] == "reziliat" and r.json()["nou"] is None
+    client.delete(f"/api/arendasi/{a['id']}")
+    client.delete(f"/api/arendasi/{b['id']}")
+
+
 def test_plata_arendas_inexistent(client):
     r = client.post("/api/arendasi/999999/plati", json={"cantitate_kg": 1, "anul_agricol": 2026})
     assert r.status_code == 404

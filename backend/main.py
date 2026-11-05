@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 
 from config import FRONTEND_DIR, log
 from migrations import ruleaza_migrari
-from routers import arendasi, auth, documente, jurnal, rapoarte, terenuri
+from routers import arendasi, auth, documente, jurnal, rapoarte, reziliere, terenuri
 from security import get_current_user
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -117,7 +117,7 @@ async def _antete(request: Request, call_next):
 # ------------------------------------------------------------------ Rute
 app.include_router(auth.router)
 _protejat = [Depends(get_current_user)]
-for modul in (arendasi, terenuri, documente, rapoarte, jurnal):
+for modul in (arendasi, reziliere, terenuri, documente, rapoarte, jurnal):
     app.include_router(modul.router, dependencies=_protejat)
 
 

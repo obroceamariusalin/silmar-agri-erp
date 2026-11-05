@@ -263,7 +263,36 @@ class BilantArendas(BaseModel):
 
 
 # ---------------------------------------------------------------- Arendași
-class ArendasCreate(BaseModel):
+class _CI(BaseModel):
+    """Date din cartea de identitate (opționale, folosite la generarea documentelor)."""
+    ci_seria: Optional[str] = None
+    ci_numar: Optional[str] = None
+    ci_eliberat: Optional[str] = None
+    ci_data: Optional[str] = None
+
+    @field_validator("ci_seria", mode="before")
+    @classmethod
+    def _seria(cls, v):
+        v = _text_optional(v, 4, "Seria CI")
+        if v and not v.isalpha():
+            raise ValueError("Seria CI conține doar litere (ex: DZ).")
+        return v.upper() if v else None
+
+    @field_validator("ci_numar", mode="before")
+    @classmethod
+    def _numar(cls, v):
+        v = _text_optional(v, 10, "Numărul CI")
+        if v and not v.isdigit():
+            raise ValueError("Numărul CI conține doar cifre.")
+        return v
+
+    @field_validator("ci_eliberat", "ci_data", mode="before")
+    @classmethod
+    def _ci_txt(cls, v):
+        return _text_optional(v, 80, "Câmpul CI")
+
+
+class ArendasCreate(_CI):
     nume_complet: str
     cnp: Optional[str] = None
     adresa: Optional[str] = None
@@ -300,7 +329,7 @@ class ArendasCreate(BaseModel):
         return _durata(v)
 
 
-class ArendasUpdate(BaseModel):
+class ArendasUpdate(_CI):
     nume_complet: Optional[str] = None
     cnp: Optional[str] = None
     adresa: Optional[str] = None
@@ -322,9 +351,22 @@ class ArendasResponse(BaseModel):
     adresa: Optional[str] = None
     nr_data_contract: Optional[str] = None
     durata_contract: Optional[str] = None
+    ci_seria: Optional[str] = None
+    ci_numar: Optional[str] = None
+    ci_eliberat: Optional[str] = None
+    ci_data: Optional[str] = None
+    stare: str = "activ"
+    data_reziliere: Optional[date] = None
+    motiv_reziliere: Optional[str] = None
+    arendas_precedent_id: Optional[int] = None
     terenuri: List[TerenResponse] = []
     plati: List[PlataResponse] = []
     preferinte: List[PreferintaAnualaResponse] = []
+
+    @field_validator("stare", mode="before")
+    @classmethod
+    def _stare(cls, v):
+        return v or "activ"
 
     @computed_field
     @property
@@ -345,7 +387,61 @@ class ArendasResponse(BaseModel):
     @computed_field
     @property
     def status_contract(self) -> str:
+        if self.stare == "reziliat":
+            return "reziliat"
         return calcule.status_contract(self.nr_data_contract, self.durata_contract)
+
+
+# ---------------------------------------------------------------- Reziliere / moștenire
+MotivReziliere = Literal["deces", "contract_nou", "renuntare", "alt"]
+
+
+class PersoanaAct(_CI):
+    """Cine semnează actul ca arendator (moștenitorul, la deces) sau noul arendator."""
+    nume_complet: str
+    cnp: Optional[str] = None
+    adresa: Optional[str] = None
+
+    _nume = field_validator("nume_complet", mode="before")(ArendasCreate._nume.__func__)
+    _cnp = field_validator("cnp", mode="before")(ArendasCreate._cnp.__func__)
+    _adresa = field_validator("adresa", mode="before")(ArendasCreate._adresa.__func__)
+
+
+class ArendatorNou(PersoanaAct):
+    nr_data_contract: Optional[str] = None
+    durata_contract: Optional[str] = None
+
+    _nr = field_validator("nr_data_contract", mode="before")(ArendasCreate._nr.__func__)
+    _durata = field_validator("durata_contract", mode="before")(ArendasCreate._durata.__func__)
+
+
+class TransferTerenuri(BaseModel):
+    """Exact una dintre `nou` (se creează dosar nou) și `existent_id` (dosar existent)."""
+    nou: Optional[ArendatorNou] = None
+    existent_id: Optional[int] = None
+    teren_ids: Optional[List[int]] = None  # None = toate terenurile
+
+    @model_validator(mode="after")
+    def _unul(self):
+        if (self.nou is None) == (self.existent_id is None):
+            raise ValueError("Alege cui se transferă terenurile: un arendator nou sau unul existent.")
+        return self
+
+
+class RezilieRequest(BaseModel):
+    motiv_tip: MotivReziliere
+    motiv_text: str
+    data_reziliere: Optional[date] = None
+    semnatar: Optional[PersoanaAct] = None  # None = semnează chiar arendatorul din dosar
+    transfer: Optional[TransferTerenuri] = None
+
+    @field_validator("motiv_text", mode="before")
+    @classmethod
+    def _motiv(cls, v):
+        v = _text_optional(v, 400, "Motivul")
+        if not v:
+            raise ValueError("Completează motivul rezilierii.")
+        return v
 
 
 # ---------------------------------------------------------------- Jurnal

@@ -29,6 +29,16 @@ def ruleaza_migrari() -> None:
         if "durata_contract" not in col_arendasi:
             conn.execute(text("ALTER TABLE arendasi ADD COLUMN durata_contract VARCHAR DEFAULT '7'"))
 
+        # CI, reziliere, moștenire
+        coloane_noi = {
+            "ci_seria": "VARCHAR", "ci_numar": "VARCHAR", "ci_eliberat": "VARCHAR", "ci_data": "VARCHAR",
+            "stare": "VARCHAR DEFAULT 'activ'", "data_reziliere": "DATE", "motiv_reziliere": "VARCHAR",
+            "arendas_precedent_id": "INTEGER REFERENCES arendasi(id) ON DELETE SET NULL",
+        }
+        for nume, tip in coloane_noi.items():
+            if nume not in col_arendasi:
+                conn.execute(text(f"ALTER TABLE arendasi ADD COLUMN {nume} {tip}"))
+
         # Plăți în bani
         col_plati = _coloane(insp, "plati")
         if "tip_plata" not in col_plati:

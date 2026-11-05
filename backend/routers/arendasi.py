@@ -35,13 +35,8 @@ def detalii_arendas(arendas_id: int, db: Session = Depends(get_db)):
 @router.post("", response_model=schemas.ArendasResponse, status_code=201)
 def adauga_arendas(date: schemas.ArendasCreate, db: Session = Depends(get_db)):
     _verifica_cnp_unic(db, date.cnp)
-    om = models.Arendas(
-        nume_complet=date.nume_complet,
-        cnp=date.cnp,
-        adresa=date.adresa,
-        nr_data_contract=date.nr_data_contract,
-        durata_contract=date.durata_contract or "7",
-    )
+    om = models.Arendas(**date.model_dump(exclude={"terenuri"}), stare="activ")
+    om.durata_contract = om.durata_contract or "7"
     # Terenurile (ex. extrase din PDF) se salvează în aceeași tranzacție: totul sau nimic
     om.terenuri = [models.Teren(**t.model_dump()) for t in date.terenuri]
     db.add(om)
@@ -117,7 +112,8 @@ def bilant(arendas_id: int, an: int, db: Session = Depends(get_db)):
 
 @router.post("/plata-totala-multipla")
 def plata_totala_multipla(date: schemas.PlataMultiplaRequest, db: Session = Depends(get_db)):
-    oameni = query_arendasi(db).filter(models.Arendas.id.in_(set(date.ids))).all()
+    oameni = [om for om in query_arendasi(db).filter(models.Arendas.id.in_(set(date.ids))).all()
+              if calcule.activ_in_an(om, date.an)]
     resturi = {
         om.id: calcule.kg_datorat(calcule.suprafata_totala(om.terenuri)) - calcule.kg_platit(om.plati, date.an)
         for om in oameni

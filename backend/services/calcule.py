@@ -72,6 +72,38 @@ def data_contract(nr_data: str | None) -> date | None:
         return None
 
 
+def nr_si_data_contract(nr_data: str | None) -> tuple[str, str]:
+    """"152/26.04.2024" -> ("152", "26.04.2024"); câmpurile lipsă devin linii punctate."""
+    nr, data = "........", "................"
+    if nr_data:
+        m = _RE_DATA.search(nr_data)
+        if m:
+            data = f"{int(m.group(1)):02d}.{int(m.group(2)):02d}.{m.group(3)}"
+            inainte = nr_data[:m.start()].strip(" /-,")
+            if inainte:
+                nr = inainte.replace("nr.", "").replace("Nr.", "").strip()
+        else:
+            nr = nr_data.strip()
+    return nr, data
+
+
+def gen_din_cnp(cnp: str | None) -> tuple[str, str, str]:
+    """(domnul/doamna, domiciliat/ă, identificat/ă) după prima cifră a CNP-ului."""
+    if cnp and len(cnp) == 13:
+        if cnp[0] in "1357":
+            return "domnul", "domiciliat", "identificat"
+        if cnp[0] in "2468":
+            return "doamna", "domiciliată", "identificată"
+    return "domnul/doamna", "domiciliat(ă)", "identificat(ă)"
+
+
+def activ_in_an(om, an: int) -> bool:
+    """Un contract reziliat mai contează pentru plăți doar până în anul rezilierii (inclusiv)."""
+    if (getattr(om, "stare", None) or "activ") != "reziliat":
+        return True
+    return om.data_reziliere is not None and om.data_reziliere.year >= an
+
+
 def durata_ani(durata: str | None) -> int | None:
     if not durata:
         return 7
